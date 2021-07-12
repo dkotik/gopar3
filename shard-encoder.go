@@ -3,6 +3,7 @@ package gopar3
 import (
 	"encoding/binary"
 	"hash"
+	"hash/crc32"
 	"io"
 )
 
@@ -11,13 +12,21 @@ const (
 	ShardLimit = 256
 )
 
+// Official documentation says that Koopman is superior for error detection.
+var crc32PolynomialTable = crc32.MakeTable(crc32.Koopman)
+
+// ShardEncoder commits and tags given shards to IO streams.
 type ShardEncoder struct {
 	w   io.Writer
 	c   hash.Hash32
 	tag [shardTagSize]byte
 }
 
+// NewShardEncoder creates the recorded and populates it with reasonable defaults. If given check sum algorithm if nil, falls back on CRC32.
 func NewShardEncoder(w io.Writer, checkSum hash.Hash32, prefill *ShardTag) (s *ShardEncoder) {
+	if checkSum == nil {
+		checkSum = crc32.New(crc32PolynomialTable)
+	}
 	s = &ShardEncoder{
 		w: w,
 		c: checkSum,
@@ -27,7 +36,7 @@ func NewShardEncoder(w io.Writer, checkSum hash.Hash32, prefill *ShardTag) (s *S
 		prefill = &ShardTag{}
 	}
 	if prefill.Version == 0 {
-		prefill.Version = Version
+		prefill.Version = VersionByte
 	}
 	prefill.Write(s.tag[:])
 	return

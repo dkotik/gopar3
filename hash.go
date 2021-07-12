@@ -5,9 +5,6 @@ import (
 	"hash/crc32"
 )
 
-// Official documentation says that Koopman is superior for error detection.
-var tablePolynomial = crc32.MakeTable(crc32.Koopman)
-
 // ChecksumCompute returns a checksum for error correction.
 func ChecksumCompute(in []byte) []byte {
 	// TODO: make sure this function does not cause race conditions due to using the table?
