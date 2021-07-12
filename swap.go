@@ -7,29 +7,34 @@ type swapReference uint16
 // another option is mmap backing https://github.com/edsrzf/mmap-go
 
 type Swap struct {
-	limit   swapReference
 	buffers map[swapReference]*bytes.Buffer
 	cursor  swapReference
 	next    chan (swapReference)
 }
 
-func (s *Swap) NextAvailable() <-chan (swapReference) {
-	if s.next == nil {
-		s.next = make(chan (swapReference), s.limit)
-	}
+func NewSwap(shardSizeInBytes uint16, memoryUsageLimitInBytes uint64) (*Swap, error) {
+	s := &Swap{}
 
+	// can calculate precisely since telomeres
+	maxShards := memoryUsageLimitInBytes / uint64(shardSizeInBytes)
+
+	s.next = make(chan (swapReference), s.limit)
 	var i swapReference
-	for ; i < s.limit; i++ {
+	for ; i < swapReference(maxShards); i++ {
 		s.buffers[i] = &bytes.Buffer{}
+		s.buffers[i].Grow(shardSize)
 		s.next <- i
 	}
 
+	return s, nil
+}
+
+func (s *Swap) NextBufferAvailable() <-chan (swapReference) {
 	return s.next
 }
 
 // Release resets and puts the buffer back into s.next?
 func (s *Swap) Release(ref swapReference) {
-	// delete(s.buffers, ref)
-	s.buffers[ref].Reset() // does this eliminate the capacity as well?
+	s.buffers[ref].Reset()
 	s.next <- ref
 }
