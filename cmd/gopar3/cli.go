@@ -73,7 +73,7 @@ type shardValue struct {
 }
 
 func (s shardValue) String() string {
-	return fmt.Sprintf("%s", s.v)
+	return fmt.Sprintf("%d", s.v)
 }
 
 func (s shardValue) Set(v string) error {

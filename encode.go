@@ -25,22 +25,12 @@ func (*Encoder) Encode(r io.Reader) error {
 	return nil
 }
 
-type checkSumWriter struct {
-	io.Writer
-	checksum hash.Hash32
-}
-
-func (c *checkSumWriter) Write(b []byte) (int, error) {
-	c.checksum.Write(b)
-	return c.Writer.Write(b)
-}
-
 func commit(w io.Writer, stream <-chan (SwapReference)) error {
-	wcross := &checkSumWriter{w, nil}
-	wshard := &checkSumWriter{wcross, nil}
-
-	for ref := range stream {
-
-	}
+	// wcross := &checkSumWriter{w, nil}
+	// wshard := &checkSumWriter{wcross, nil}
+	//
+	// for ref := range stream {
+	//
+	// }
 	return nil
 }

@@ -12,9 +12,6 @@ const (
 	ShardLimit = 256
 )
 
-// Official documentation says that Koopman is superior for error detection.
-var crc32PolynomialTable = crc32.MakeTable(crc32.Koopman)
-
 // ShardEncoder commits and tags given shards to IO streams.
 type ShardEncoder struct {
 	w   io.Writer

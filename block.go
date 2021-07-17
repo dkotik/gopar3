@@ -1,7 +1,6 @@
 package gopar3
 
 import (
-	"fmt"
 	"hash/crc32"
 )
 
@@ -14,7 +13,7 @@ const (
 
 // Block is a minimal unit of the armored file.
 type Block struct {
-	Body   [blockSize + MetaTagTotalLength]byte
+	Body   [blockSize]byte
 	Length int
 	Index  int
 }
@@ -32,12 +31,6 @@ func (b *Block) Write(data []byte) (n int, err error) {
 // 		b.Body[blockSize:], ChecksumCompute(b.Body[:blockSize]))
 // }
 
-// IsSibling returns true if two blocks found next to each other belong together.
-func (b *Block) IsSibling(a *Block) bool {
-	// if the sequence number is lower
-	return b.Body[blockSize+metaTagPositionSequenceNumber] >= a.Body[blockSize+metaTagPositionSequenceNumber]
-}
-
 // // Bytes returns the proper slice of bytes representing its contents.
 // func (b *Block) Bytes() []byte {
 // 	return b.Body[:b.Length]
@@ -51,8 +44,8 @@ func (b *Block) IsSibling(a *Block) bool {
 // 	return false
 // }
 
-func (b *Block) String() string {
-	return fmt.Sprintf("Block#%x@%d-%d",
-		b.Body[blockSize+metaTagPositionChecksum:blockSize+metaTagPositionChecksum+blockHashSize],
-		b.Index, b.Index+b.Length) // byte range within the file
-}
+// func (b *Block) String() string {
+// 	return fmt.Sprintf("Block#%x@%d-%d",
+// 		b.Body[blockSize+metaTagPositionChecksum:blockSize+metaTagPositionChecksum+blockHashSize],
+// 		b.Index, b.Index+b.Length) // byte range within the file
+// }

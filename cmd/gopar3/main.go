@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 )
 
 var fragments uint8 = 8
@@ -23,7 +22,7 @@ func main() {
 	case "encode":
 		// flagset.Parse(os.Args[2:])
 		// flagset.PrintDefaults()
-		fmt.Printf("%d %t", fragments, *growth)
+		// fmt.Printf("%d %t", fragments, *growth)
 		// fmt.Printf("%d %t", uint16(*fragments), uint8(*fragments))
 		return
 	case "decode":
