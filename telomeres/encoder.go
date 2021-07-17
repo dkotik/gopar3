@@ -38,9 +38,10 @@ func (t *TelomereStreamEncoder) Write(b []byte) (n int, err error) {
 	// one less for cursor, because may write two bytes per loop iteration
 	max := len(t.b) - 1
 	for ; n < len(b) && t.cursor < max; n++ {
-		if b[n] == telomereMarkByte {
+		current := b[n]
+		if current == telomereMarkByte || current == telomereEscapeByte {
 			t.b[t.cursor] = telomereEscapeByte
-			t.b[t.cursor+1] = telomereMarkByte
+			t.b[t.cursor+1] = current
 			t.cursor += 2
 		} else {
 			t.b[t.cursor] = b[n]
