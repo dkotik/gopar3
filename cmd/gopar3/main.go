@@ -3,33 +3,32 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
+)
+
+var fragments uint8 = 8
+
+var (
+	// fragments   = flag.Uint("fragments", 13, "break input into this many parts")
+	growth      = flag.Float64("growth", 1.3, "all fragments together will take up this much  more space than the input")
+	telomeres   = flag.Uint("telomeres", 8, "length of telomere padding protecting shard boundaries  more padding increases output resilience")
+	memoryLimit = flag.Int("memoryMB", 128, "memory usage limit for operations  in Megabytes")
+
+	requiredShards, redundantShards uint8
+	command, target                 string
 )
 
 func main() {
-	var command string
-	if len(os.Args) > 1 {
-		command = os.Args[1]
-	}
-	flagset := flag.NewFlagSet(command, flag.ContinueOnError)
-
+	must(parseFlags())
 	switch command {
 	case "encode":
-		fragments := flagset.Uint("fragments", 13, "break input into this many parts")
-		growth := flagset.Float64("growth", 1.3,
-			"all fragments together will take up\nthis much  more space than the input")
-		flagset.Parse(os.Args[2:])
-		flagset.PrintDefaults()
-		fmt.Printf("%d %t", *fragments, *growth)
+		// flagset.Parse(os.Args[2:])
+		// flagset.PrintDefaults()
+		fmt.Printf("%d %t", fragments, *growth)
 		// fmt.Printf("%d %t", uint16(*fragments), uint8(*fragments))
+		return
 	case "decode":
-		// memoryLimit := flagset.Uint("memoryMB", 200, "the amount of memory to use")
-	default:
-		fmt.Printf(`gopar3 %s data resilience utility
-
-`, "gopar3.Version")
-
-		fmt.Printf("%v", os.Args)
-		flag.PrintDefaults()
+		// *memoryLimit * 1024 * 1024
+		return
 	}
+	flag.Usage()
 }

@@ -1,7 +1,6 @@
 package gopar3
 
 import (
-	"bytes"
 	"fmt"
 	"hash/crc32"
 )
@@ -27,25 +26,11 @@ func (b *Block) Write(data []byte) (n int, err error) {
 	return
 }
 
-// Seal writes meta tag bytes to the tail. Adds a full checksum to the very end.
-func (b *Block) Seal(withMetaTag []byte) {
-	copy(b.Body[blockSize-MetaTagTotalLength:], withMetaTag)
-	copy(b.Body[blockSize-blockHashSize:],
-		ChecksumCompute(b.Body[:blockSize-blockHashSize]))
-	// version|sequence|required|redundant|padding|checksum
-	// metaTagPositionVersionNumber   = 0
-	// metaTagPositionSequenceNumber  = metaTagPositionVersionNumber + blockHashSize
-	// metaTagPositionRequiredShards  = metaTagPositionVersionNumber + 1
-	// metaTagPositionRedundantShards = metaTagPositionRequiredShards + 1
-	// metaTagPositionPaddingLength   = metaTagPositionRedundantShards + 1
-	// metaTagPositionChecksum        = metaTagPositionPaddingLength + 2
-}
-
-// IsValid returns true if the hash value matches the body.
-func (b *Block) IsValid() bool {
-	return 0 == bytes.Compare(
-		b.Body[blockSize:], ChecksumCompute(b.Body[:blockSize]))
-}
+// // IsValid returns true if the hash value matches the body.
+// func (b *Block) IsValid() bool {
+// 	return 0 == bytes.Compare(
+// 		b.Body[blockSize:], ChecksumCompute(b.Body[:blockSize]))
+// }
 
 // IsSibling returns true if two blocks found next to each other belong together.
 func (b *Block) IsSibling(a *Block) bool {

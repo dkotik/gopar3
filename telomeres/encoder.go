@@ -29,7 +29,7 @@ func NewTelomereStreamEncoder(w io.Writer, telomereLength, bufferSize int) *Telo
 
 // Flush commits the contents of the buffer to the underlying Writer.
 func (t *TelomereStreamEncoder) Flush() (err error) {
-	_, err = io.Copy(t.w, bytes.NewReader(t.b[:]))
+	_, err = io.Copy(t.w, bytes.NewReader(t.b[:t.cursor]))
 	t.cursor = 0
 	return err
 }

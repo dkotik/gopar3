@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/rand"
+	"sort"
 	"time"
 )
 
@@ -48,4 +49,18 @@ func (t *ShardTag) Write(b []byte) (n int, err error) {
 	binary.BigEndian.PutUint64(b[shardTagBlockSequencePosition:shardTagShardSequencePosition], t.BlockSequence)
 	binary.BigEndian.PutUint16(b[shardTagShardSequencePosition:shardTagChecksumPosition], t.ShardSequence)
 	return 0, nil
+}
+
+func medianUint8(bunch []uint8) uint8 {
+	sort.Slice(bunch, func(i int, j int) bool {
+		return bunch[i] > bunch[j]
+	})
+	return bunch[len(bunch)/2]
+}
+
+func medianUint16(bunch []uint16) uint16 {
+	sort.Slice(bunch, func(i int, j int) bool {
+		return bunch[i] > bunch[j]
+	})
+	return bunch[len(bunch)/2]
 }

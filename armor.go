@@ -40,7 +40,7 @@ func StreamBlocks(out chan<- Block, r io.Reader) (err error) {
 				continue
 			}
 			if telomereCount > 0 {
-				out <- Block{result, resultIndex}
+				// out <- Block{result, resultIndex} ??
 				resultIndex = 0
 				continue
 			}
