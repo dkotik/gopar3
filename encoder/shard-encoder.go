@@ -1,10 +1,11 @@
-package gopar3
+package encoder
 
 import (
 	"encoding/binary"
 	"hash"
-	"hash/crc32"
 	"io"
+
+	"github.com/dkotik/gopar3/shard"
 )
 
 const (
@@ -16,13 +17,13 @@ const (
 type ShardEncoder struct {
 	w   io.Writer
 	c   hash.Hash32
-	tag [shardTagSize]byte
+	tag shard.TagPrototype
 }
 
 // NewShardEncoder creates the recorded and populates it with reasonable defaults. If given check sum algorithm if nil, falls back on CRC32.
-func NewShardEncoder(w io.Writer, checkSum hash.Hash32, prefill *ShardTag) (s *ShardEncoder) {
+func NewShardEncoder(w io.Writer, checkSum hash.Hash32, prefill *shard.ShardTag) (s *ShardEncoder) {
 	if checkSum == nil {
-		checkSum = crc32.New(crc32PolynomialTable)
+		checkSum = shard.NewChecksum()
 	}
 	s = &ShardEncoder{
 		w: w,
@@ -30,11 +31,11 @@ func NewShardEncoder(w io.Writer, checkSum hash.Hash32, prefill *ShardTag) (s *S
 	}
 
 	if prefill == nil {
-		prefill = &ShardTag{}
+		prefill = &shard.ShardTag{}
 	}
-	if prefill.Version == 0 {
-		prefill.Version = VersionByte
-	}
+	// if prefill.Version == 0 {
+	// 	prefill.Version = VersionByte
+	// }
 	prefill.Write(s.tag[:])
 	return
 }
@@ -59,15 +60,4 @@ func (s *ShardEncoder) Seal() (err error) {
 	s.c.Reset()
 	_, err = s.w.Write(checkSumBytes[:])
 	return
-}
-
-// SetBlockSequence updates tag with a new block sequence.
-func (s *ShardEncoder) SetBlockSequence(n uint64) {
-	binary.BigEndian.PutUint64(
-		s.tag[shardTagBlockSequencePosition:shardTagShardSequencePosition], n)
-}
-
-// SetShardSequence updates tag with a new shard sequence.
-func (s *ShardEncoder) SetShardSequence(n uint8) {
-	s.tag[shardTagShardSequencePosition] = byte(n)
 }

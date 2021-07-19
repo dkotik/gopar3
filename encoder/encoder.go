@@ -1,4 +1,4 @@
-package gopar3
+package encoder
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"hash"
 	"io"
 
+	"github.com/dkotik/gopar3/swap"
 	"github.com/dkotik/gopar3/telomeres"
 	"github.com/klauspost/reedsolomon"
 )
@@ -17,15 +18,15 @@ type Encoder struct {
 	RedundantShards uint8
 	ChosenCheckSum  hash.Hash32
 
-	blockSize int
-	swap      *Swap
+	shardSize int // TODO: replace with shard size
+	swap      *swap.Swap
 	out       []*telomeres.Encoder
 	w         []io.Writer
 }
 
-func NewEncoder(blockSize int) (*Encoder, error) {
+func NewEncoder(withOptions ...Option) (*Encoder, error) {
 	e := &Encoder{
-		blockSize: blockSize,
+		shardSize: 512,
 	}
 	if uint16(e.RequiredShards+e.RedundantShards) > 256 { // TODO: test for this
 		return nil, errors.New("sum of data and parity shards cannot exceed 256")
@@ -79,12 +80,12 @@ func (e *Encoder) Encode(ctx context.Context, r io.Reader) (err error) {
 func (e *Encoder) chunk(
 	ctx context.Context,
 	r io.Reader,
-	s *Swap,
-	stream chan<- (SwapReference),
+	s *swap.Swap,
+	stream chan<- (swap.SwapReference),
 ) (err error) {
 	// read blocksize*RequiredShards of bytes
 	// pad to the required length
-	limit := int64(e.blockSize)
+	limit := int64(e.shardSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -106,7 +107,7 @@ func (e *Encoder) chunk(
 	return
 }
 
-func commit(t *telomeres.Encoder, crossCheckFrequency uint, s *Swap, stream <-chan (SwapReference)) (err error) {
+func commit(t *telomeres.Encoder, crossCheckFrequency uint, s *swap.Swap, stream <-chan (swap.SwapReference)) (err error) {
 	wcross := &checkSumWriter{t, nil}
 	wshard := &checkSumWriter{wcross, nil}
 

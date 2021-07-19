@@ -1,11 +1,12 @@
-package gopar3
+package encoder
 
 import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 	"testing"
+
+	"github.com/dkotik/gopar3/shard"
 )
 
 // https://www.scadacore.com/tools/programming-calculators/online-checksum-calculator/
@@ -21,7 +22,7 @@ func TestCheckSumWriter(t *testing.T) {
 	}
 
 	b := &bytes.Buffer{}
-	w := &checkSumWriter{b, crc32.New(crc32PolynomialTable)}
+	w := &checkSumWriter{b, shard.NewChecksum()}
 	var c [4]byte
 	for _, cs := range cases {
 		w.checksum.Reset()
