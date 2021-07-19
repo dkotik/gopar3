@@ -13,7 +13,8 @@ import (
 
 func swapWork(s *Swap) error {
 	data := []byte(fmt.Sprintf("%d", 9999999999+rand.Intn(999999999999)))
-	ref, b, err := s.Reserve()
+	b := bytes.NewBufferString("")
+	ref, err := s.Reserve(b)
 	if err != nil {
 		return err
 	}
@@ -38,7 +39,7 @@ func swapWork(s *Swap) error {
 }
 
 func TestSwap(t *testing.T) {
-	s := NewSwap(0, 99999999)
+	s := NewSwap(99999999)
 	g := &errgroup.Group{}
 
 	for i := 0; i < 10; i++ {

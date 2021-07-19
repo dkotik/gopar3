@@ -5,22 +5,22 @@ import (
 	"io"
 )
 
-// TelomereStreamEncoder appends telomereEscapeByte to each telomereMarkByte. Do not forget to call WriteTelomere at the end or flush manually.
-type TelomereStreamEncoder struct {
+// Encoder appends telomereEscapeByte to each telomereMarkByte. Do not forget to call WriteTelomere at the end or flush manually.
+type Encoder struct {
 	t      []byte
 	b      []byte
 	cursor int
 	w      io.Writer
 }
 
-// NewTelomereStreamEncoder sets up the encoder.
-func NewTelomereStreamEncoder(w io.Writer, telomereLength, bufferSize int) *TelomereStreamEncoder {
+// NewEncoder sets up the encoder.
+func NewEncoder(w io.Writer, telomereLength, bufferSize int) *Encoder {
 	telomeres := make([]byte, telomereLength)
 	for i := 0; i < telomereLength; i++ {
 		telomeres[i] = telomereMarkByte
 	}
 
-	return &TelomereStreamEncoder{
+	return &Encoder{
 		t: telomeres,
 		b: make([]byte, bufferSize),
 		w: w,
@@ -28,13 +28,13 @@ func NewTelomereStreamEncoder(w io.Writer, telomereLength, bufferSize int) *Telo
 }
 
 // Flush commits the contents of the buffer to the underlying Writer.
-func (t *TelomereStreamEncoder) Flush() (err error) {
+func (t *Encoder) Flush() (err error) {
 	_, err = io.Copy(t.w, bytes.NewReader(t.b[:t.cursor]))
 	t.cursor = 0
 	return err
 }
 
-func (t *TelomereStreamEncoder) Write(b []byte) (n int, err error) {
+func (t *Encoder) Write(b []byte) (n int, err error) {
 	// one less for cursor, because may write two bytes per loop iteration
 	max := len(t.b) - 1
 	for ; n < len(b) && t.cursor < max; n++ {
@@ -56,8 +56,8 @@ func (t *TelomereStreamEncoder) Write(b []byte) (n int, err error) {
 	return n, nil
 }
 
-// WriteTelomere flushes the buffer and writes repeated telomereEscapeBytes to the underlying Writer.
-func (t *TelomereStreamEncoder) WriteTelomere() (n int, err error) {
+// Cut flushes the buffer and writes repeated telomereEscapeBytes to the underlying Writer.
+func (t *Encoder) Cut() (n int, err error) {
 	if err = t.Flush(); err != nil {
 		return 0, err
 	}

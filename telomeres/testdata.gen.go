@@ -23,7 +23,7 @@ func main() {
 	}
 	defer f.Close()
 
-	encoder := telomeres.NewTelomereStreamEncoder(f, 0, 1024)
+	encoder := telomeres.NewEncoder(f, 0, 1024)
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 10; i++ {
 		solution := &bytes.Buffer{}

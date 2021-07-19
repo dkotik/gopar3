@@ -27,7 +27,7 @@ func TestStoredCases(t *testing.T) {
 		}
 		// spew.Dump(pieces)
 
-		decoder := NewTelomereStreamDecoder(
+		decoder := NewDecoder(
 			bytes.NewReader(encoded), 4, 1024, 4096)
 
 		comp := &bytes.Buffer{}

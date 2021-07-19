@@ -8,20 +8,20 @@ import (
 // ErrEndReached represents a state of encountering a repeated telomereMarkByte.
 var ErrEndReached = errors.New("reader has no more data")
 
-// TelomereStreamDecoder reads the stream, strips telomereEscapeBytes, and detects telomere boundaries.
-type TelomereStreamDecoder struct {
+// Decoder reads the stream, strips telomereEscapeBytes, and detects telomere boundaries.
+type Decoder struct {
 	minimum, maximum, boundary int
 	b, window                  []byte
 	r                          io.Reader
 }
 
-// NewTelomereStreamDecoder sets up the decoder. Telomere length determines how many telomereMarkByte are found in a sequence before ErrTelomereBoundaryReached state is triggered.
-func NewTelomereStreamDecoder(
+// NewDecoder sets up the decoder. Telomere length determines how many telomereMarkByte are found in a sequence before ErrTelomereBoundaryReached state is triggered.
+func NewDecoder(
 	r io.Reader,
 	minimumTelomereLength int,
 	maximumTelomereLength int,
 	bufferSize int,
-) *TelomereStreamDecoder {
+) *Decoder {
 	if minimumTelomereLength == 0 {
 		panic("minimum telomere length cannot be 0")
 	}
@@ -34,7 +34,7 @@ func NewTelomereStreamDecoder(
 	if minimumTelomereLength >= bufferSize {
 		panic("telomere length must be less than the allocated buffer size")
 	}
-	return &TelomereStreamDecoder{
+	return &Decoder{
 		minimum: minimumTelomereLength,
 		maximum: maximumTelomereLength,
 		b:       make([]byte, bufferSize),
@@ -42,7 +42,7 @@ func NewTelomereStreamDecoder(
 	}
 }
 
-func (t *TelomereStreamDecoder) fillBuffer() (err error) {
+func (t *Decoder) fillBuffer() (err error) {
 	n := copy(t.b[:], t.window[:]) // move remainder to the front
 
 	var j int
@@ -59,7 +59,7 @@ func (t *TelomereStreamDecoder) fillBuffer() (err error) {
 }
 
 // Skip keeps reading telomereMarkBytes until something else is found. Returns the number of telomereMarkBytes read and an error.
-func (t *TelomereStreamDecoder) Skip() (boundary int, err error) {
+func (t *Decoder) Skip() (boundary int, err error) {
 	// var i int
 	for {
 		if len(t.window) < t.minimum {
@@ -90,7 +90,7 @@ func (t *TelomereStreamDecoder) Skip() (boundary int, err error) {
 	}
 }
 
-func (t *TelomereStreamDecoder) Read(b []byte) (n int, err error) {
+func (t *Decoder) Read(b []byte) (n int, err error) {
 	boundary, err := t.Skip()
 	if err != nil {
 		return 0, err

@@ -9,7 +9,7 @@ import (
 
 func TestDecoding(t *testing.T) {
 	b := bytes.NewBuffer([]byte("hello::::world::::"))
-	d := NewTelomereStreamDecoder(b, 4, 100, 1024)
+	d := NewDecoder(b, 4, 100, 1024)
 
 	s1 := &bytes.Buffer{}
 	_, err := io.Copy(s1, d)
@@ -30,23 +30,23 @@ func TestDecoding(t *testing.T) {
 	}
 }
 
-func ExampleTelomereStreamEncoder_Encode() {
+func ExampleEncoder_Encode() {
 	b := &bytes.Buffer{}
-	e := NewTelomereStreamEncoder(b, 4, 1024)
+	e := NewEncoder(b, 4, 1024)
 
 	e.Write([]byte("hello"))
-	e.WriteTelomere()
+	e.Cut()
 	e.Write([]byte("world"))
-	e.WriteTelomere()
+	e.Cut()
 	// e.Flush() // why is this NOT needed?
 
 	fmt.Print(b.String())
 	// Output: hello::::world::::
 }
 
-func ExampleTelomereStreamEncoder_Decode() {
+func ExampleEncoder_Decode() {
 	b := bytes.NewBuffer([]byte("hello::::world::::"))
-	d := NewTelomereStreamDecoder(b, 4, 100, 1024)
+	d := NewDecoder(b, 4, 100, 1024)
 
 	s1 := &bytes.Buffer{}
 	io.Copy(s1, d)
