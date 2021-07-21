@@ -7,9 +7,12 @@ import (
 	"hash"
 	"io"
 
-	"github.com/dkotik/gopar3/swap"
+	"github.com/dkotik/gopar3/shard"
 	"github.com/dkotik/gopar3/telomeres"
-	"github.com/klauspost/reedsolomon"
+)
+
+const (
+	telomereEncoderBufferSize = 4096
 )
 
 // Encoder adds data resiliency to its input.
@@ -18,12 +21,16 @@ type Encoder struct {
 	RedundantShards uint8
 	ChosenCheckSum  hash.Hash32
 
-	shardSize int // TODO: replace with shard size
-	swap      *swap.Swap
-	out       []*telomeres.Encoder
-	w         []io.Writer
+	prototype           shard.TagPrototype
+	shardSize           int // TODO: replace with shard size
+	crossCheckFrequency uint
+	telomeresLength     int
+	w                   []io.Writer
+	// out                 []*telomeres.Encoder
+	// swap                *swap.Swap
 }
 
+// NewEncoder initializes the encoder with options.
 func NewEncoder(withOptions ...Option) (*Encoder, error) {
 	e := &Encoder{
 		shardSize: 512,
@@ -35,89 +42,37 @@ func NewEncoder(withOptions ...Option) (*Encoder, error) {
 	return nil, nil
 }
 
-// Use context.Context instead
-// func (e *Encoder) IsDone() bool {
-// 	return false
-// }
-
 // Encode uses a pipe pattern to split the contents of the reader into writers while encoding each block.
 func (e *Encoder) Encode(ctx context.Context, r io.Reader) (err error) {
+	// prepare writers
+
 	// Stage 1: read chunks
 	// read blocksize*RequiredShards of bytes
 	// pad to the required length
 
-	// Stage 2: generate Reed-Solomon shards
-	enc, err := reedsolomon.New(int(e.RequiredShards), int(e.RedundantShards))
-	if err != nil {
-		return err
-	}
-	data := make([][]byte, e.RequiredShards+e.RedundantShards)
-	// refs := make([]SwapReference, e.RequiredShards+e.RedundantShards)
-	var i uint8
-	for ; i < e.RequiredShards; i++ {
-		// data[i] = <-stream
-		// check length
-		// what if stream is closed? fill with padded data, create a buffer for each // pad at the reader
-	}
-	// set padding for tag
-	if err = enc.Encode(data); err != nil { // this fills up redundant shards
-		return err
-	}
-	for i = 0; i < e.RequiredShards; i++ {
-		// add tags to data
-		// feed data refs to disk writers
-	}
-	for i = 0; i < e.RedundantShards; i++ {
-		// add tags to data
-		// feed data refs to disk writers
-	}
+	// Stage 2: create Reed-Solomon shards
 
 	// Stage 3: commit the shards to output
 
 	return nil
 }
 
-func (e *Encoder) chunk(
-	ctx context.Context,
-	r io.Reader,
-	s *swap.Swap,
-	stream chan<- (swap.SwapReference),
-) (err error) {
-	// read blocksize*RequiredShards of bytes
-	// pad to the required length
-	limit := int64(e.shardSize)
-	for {
+func (e *Encoder) commit(ctx context.Context, w io.Writer, stream <-chan (*bytes.Buffer)) (err error) {
+	t := telomeres.NewEncoder(w, e.telomeresLength, telomereEncoderBufferSize)
+	wcross := &checkSumWriter{t, nil}
+	wshard := &checkSumWriter{wcross, nil}
+
+	var i uint
+	for b := range stream {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		b := &bytes.Buffer{}
-		// b.Grow(blockSize * e.RequiredShards) ???
-		ref, err := s.Reserve(b)
-		if err != nil {
-			return err
+		if b == nil {
+			return nil // finished
 		}
-		_, err = io.CopyN(b, r, limit)
-		if err != nil {
-			return err
-		}
-		stream <- ref
-	}
-	return
-}
-
-func commit(t *telomeres.Encoder, crossCheckFrequency uint, s *swap.Swap, stream <-chan (swap.SwapReference)) (err error) {
-	wcross := &checkSumWriter{t, nil}
-	wshard := &checkSumWriter{wcross, nil}
-
-	var i uint
-	for ref := range stream {
-		swap, err := s.Retrieve(ref)
-		if err != nil {
-			return err
-		}
-		if _, err = io.Copy(wshard, swap); err != nil {
+		if _, err = io.Copy(wshard, b); err != nil {
 			return err
 		}
 		if err = wshard.Cut(); err != nil {
@@ -128,7 +83,7 @@ func commit(t *telomeres.Encoder, crossCheckFrequency uint, s *swap.Swap, stream
 		}
 
 		i++
-		if i%crossCheckFrequency == 0 {
+		if i%e.crossCheckFrequency == 0 {
 			if err = wcross.Cut(); err != nil {
 				return err
 			}

@@ -2,11 +2,13 @@ package decoder
 
 import (
 	"context"
+	"hash"
 	"io"
 )
 
 // Decoder restores the original data from a set of streams.
 type Decoder struct {
+	checksumFactory func() hash.Hash32
 }
 
 // Decode reads the streams, orders shards, recovers data, and writes it out to destination writer.

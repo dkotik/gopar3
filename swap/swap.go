@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"runtime"
 	"sync"
@@ -73,14 +72,14 @@ func (s *Swap) Reserve(b *bytes.Buffer) (SwapReference, error) {
 }
 
 // Retrieve locates the correct reserved buffer and returns it.
-func (s *Swap) Retrieve(ref SwapReference) (io.Reader, error) {
+func (s *Swap) Retrieve(ref SwapReference) (*bytes.Buffer, error) {
 	s.mutex.Lock()
 	b, ok := s.buffers[ref]
 	s.mutex.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("swap buffer %q does not exist", ref)
 	}
-	return bytes.NewReader(b.Bytes()), nil
+	return b, nil
 }
 
 // Release destroys the buffer.
