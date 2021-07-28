@@ -13,6 +13,9 @@ import (
 
 const (
 	telomereEncoderBufferSize = 4096
+
+	// PaddingByte is added to shards to make them all the same size.
+	PaddingByte = byte('#')
 )
 
 // Encoder adds data resiliency to its input.
@@ -30,11 +33,17 @@ type Encoder struct {
 	// swap                *swap.Swap
 }
 
-// NewEncoder initializes the encoder with options.
-func NewEncoder(withOptions ...Option) (*Encoder, error) {
-	e := &Encoder{
-		shardSize: 512,
+// NewEncoder initializes the encoder with options. Default options are used, if no options were specified.
+func NewEncoder(withOptions ...Option) (e *Encoder, err error) {
+	if len(withOptions) == 0 {
+		withOptions = []Option{WithDefaultOptions()}
 	}
+
+	e = &Encoder{}
+	if err = WithOptions(withOptions...)(e); err != nil {
+		return nil, err
+	}
+
 	if uint16(e.RequiredShards+e.RedundantShards) > 256 { // TODO: test for this
 		return nil, errors.New("sum of data and parity shards cannot exceed 256")
 	}

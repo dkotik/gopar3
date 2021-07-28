@@ -2,12 +2,55 @@ package encoder
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/dkotik/gopar3/shard"
 	"github.com/klauspost/reedsolomon"
 )
+
+// AddPadding fill the last buffer to full shard size. If the number of given shards is less than required for Reed-Solomon computation, additional buffers filled with padding bytes are appended to the shard list.
+func (e *Encoder) AddPadding(shards []*bytes.Buffer) (uint16, error) {
+	req := int(e.RequiredShards) // TODO: move conversions to constructor?
+	padding := e.shardSize - shards[req].Len()
+	if padding > 0 {
+		n, err := shards[req].Write(bytes.Repeat([]byte{PaddingByte}, padding))
+		if err != nil {
+			return 0, err
+		}
+		if n != padding {
+			return 0, io.ErrShortBuffer
+		}
+	}
+
+	if have := len(shards); have < req {
+		empty := bytes.Repeat([]byte{PaddingByte}, e.shardSize)
+		for ; have < req; have++ {
+			b := &bytes.Buffer{}
+			b.Grow(e.shardSize + shard.TagSize)
+			n, err := b.Write(empty)
+			if err != nil {
+				return 0, err
+			}
+			if n != padding {
+				return 0, io.ErrShortBuffer
+			}
+			shards = append(shards, b)
+			padding += n
+		}
+	}
+
+	if padding > int(^uint16(0)) {
+		// TODO: cannot have more than 65535 padding,
+		// which means 65535 / 256 = 255 maxShardsize
+		// which is VERY limiting
+		// this needs to be accounted for in the option
+		return 0, errors.New("padding value is overflowing")
+	}
+
+	return uint16(padding), nil
+}
 
 func (e *Encoder) createShards(block uint64, base []*bytes.Buffer) error {
 	req, red := int(e.RequiredShards), int(e.RedundantShards)
@@ -20,16 +63,9 @@ func (e *Encoder) createShards(block uint64, base []*bytes.Buffer) error {
 		return err
 	}
 
-	// add padding to the last buffer, if needed
-	padding := e.shardSize - base[req].Len()
-	if padding > 0 {
-		n, err := base[req].Write(bytes.Repeat([]byte("#"), padding))
-		if err != nil {
-			return err
-		}
-		if n != padding {
-			return io.ErrShortBuffer
-		}
+	padding, err := e.AddPadding(base)
+	if err != nil {
+		return err
 	}
 
 	data := make([][]byte, total)
@@ -48,7 +84,7 @@ func (e *Encoder) createShards(block uint64, base []*bytes.Buffer) error {
 	}
 
 	tag := e.prototype // tag every shard
-	tag.SetPadding(uint16(padding))
+	tag.SetPadding(padding)
 	tag.SetBlockSequence(block)
 	for i := 0; i < total; i++ {
 		tag.SetShardSequence(uint8(i))
