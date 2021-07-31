@@ -8,19 +8,19 @@ import (
 type TagPrototype [TagSize]byte
 
 // SetPadding updates tag with a padding value.
-func (t TagPrototype) SetPadding(n uint16) {
+func (t *TagPrototype) SetPadding(n uint16) {
 	binary.BigEndian.PutUint16(
 		t[TagPaddingPosition:TagBlockSequencePosition], n)
 }
 
 // SetBlockSequence updates tag with a new block sequence.
-func (t TagPrototype) SetBlockSequence(n uint64) {
+func (t *TagPrototype) SetBlockSequence(n uint64) {
 	binary.BigEndian.PutUint64(
 		t[TagBlockSequencePosition:TagShardSequencePosition], n)
 }
 
 // SetShardSequence updates tag with a new shard sequence.
-func (t TagPrototype) SetShardSequence(n uint8) {
+func (t *TagPrototype) SetShardSequence(n uint8) {
 	t[TagShardSequencePosition] = byte(n)
 }
 

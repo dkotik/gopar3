@@ -45,7 +45,7 @@ func WithGrowthFactor(totalFragments uint, g float64) Option {
 
 // WithShardSize sets the size of created chunks. Smaller chunks make the output more resilient at the cost of disk space and recovery speed.
 func WithShardSize(inbytes int) Option {
-	// if padding > int(^uint16(0)) {
+	// if padding > int(^uint16(0)) { // see const shard.MaxPadding
 	// 	// TODO: cannot have more than 65535 padding,
 	// 	// which means 65535 / 256 = 255 maxShardsize
 	// 	// which is VERY limiting
