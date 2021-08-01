@@ -25,7 +25,7 @@ type Encoder struct {
 	ChosenCheckSum  hash.Hash32
 
 	prototype           shard.TagPrototype
-	shardSize           int // TODO: replace with shard size
+	shardSize           int // TODO: replace with shard size // int64?
 	crossCheckFrequency uint
 	telomeresLength     int
 	w                   []io.Writer

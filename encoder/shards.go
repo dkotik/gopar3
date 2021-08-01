@@ -52,7 +52,7 @@ func (e *Encoder) AddPadding(shards []*bytes.Buffer) (uint16, error) {
 	return uint16(padding), nil
 }
 
-func (e *Encoder) createShards(block uint64, base []*bytes.Buffer) error {
+func (e *Encoder) createShards(block uint32, base []*bytes.Buffer) error {
 	req, red := int(e.RequiredShards), int(e.RedundantShards)
 	total := req + red
 	if l := len(base); l != req {

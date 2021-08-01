@@ -20,7 +20,7 @@ func makeShards(tag *shard.Tag) [][]byte {
 	proto := tag.Prototype()
 	sl := make([][]byte, shards)
 	var shardn uint8
-	var block uint64
+	var block uint32
 	for i := 0; i < shards; i++ {
 		b := make([]byte, cutoff)
 		if n := copy(b, proto[:]); n != cutoff {
