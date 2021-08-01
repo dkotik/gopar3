@@ -14,17 +14,17 @@ const (
 	TagRequiredShardsPosition      = TagBlockDifferentiatorPosition + 6
 	TagRedundantShardsPosition     = TagRequiredShardsPosition + 1
 	TagPaddingPosition             = TagRedundantShardsPosition + 4 // check?
-	TagBlockSequencePosition       = TagPaddingPosition + 2
-	TagShardSequencePosition       = TagBlockSequencePosition + 4
+	TagBatchSequencePosition       = TagPaddingPosition + 2
+	TagShardSequencePosition       = TagBatchSequencePosition + 4
 	TagChecksumPosition            = TagShardSequencePosition + 2
 
 	// Derivatives
 	TagSize            = TagChecksumPosition + 4 // should be 24b
 	DifferentiatorSize = TagRequiredShardsPosition - TagBlockDifferentiatorPosition
 	// MaxPadding determines how large of a pad the tag supports.
-	MaxPadding = (1 << (8 * (TagBlockSequencePosition - TagPaddingPosition))) - 1
+	MaxPadding = (1 << (8 * (TagBatchSequencePosition - TagPaddingPosition))) - 1
 	// MaxBlocks shows how many blocks can be encoded at most.
-	MaxBlocks = (1 << (8 * (TagShardSequencePosition - TagBlockSequencePosition)))
+	MaxBlocks = (1 << (8 * (TagShardSequencePosition - TagBatchSequencePosition)))
 )
 
 // Tag holds the all the neccessary hints to perform full data reconstruction.
@@ -55,7 +55,7 @@ func (t *Tag) Write(b []byte) (n int, err error) {
 	b[TagRedundantShardsPosition] = byte(t.RedundantShards)
 	// b[TagPaddingPosition] = byte(t.Padding)
 	binary.BigEndian.PutUint32(b[TagRedundantShardsPosition:TagPaddingPosition], t.Padding)
-	binary.BigEndian.PutUint32(b[TagBlockSequencePosition:TagShardSequencePosition], t.BlockSequence)
+	binary.BigEndian.PutUint32(b[TagBatchSequencePosition:TagShardSequencePosition], t.BlockSequence)
 	binary.BigEndian.PutUint16(b[TagShardSequencePosition:TagChecksumPosition], t.ShardSequence)
 	return 0, nil
 }

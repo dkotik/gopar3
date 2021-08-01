@@ -29,8 +29,6 @@ type Encoder struct {
 	crossCheckFrequency uint
 	telomeresLength     int
 	w                   []io.Writer
-	// out                 []*telomeres.Encoder
-	// swap                *swap.Swap
 }
 
 // NewEncoder initializes the encoder with options. Default options are used, if no options were specified.

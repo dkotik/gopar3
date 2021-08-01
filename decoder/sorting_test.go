@@ -31,7 +31,7 @@ func makeShards(tag *shard.Tag) [][]byte {
 		// fmt.Println(shardn)
 		proto.SetShardSequence(shardn)
 		if shardn == 0 {
-			proto.SetBlockSequence(block)
+			proto.SetBatchSequence(block)
 			block++
 		}
 	}
@@ -71,7 +71,7 @@ func shardsToString(s [][]byte) string {
 
 	for i := 0; i < len(s); i++ {
 		result.WriteRune('\n')
-		fmt.Fprintf(result, "%x", s[i][shard.TagBlockSequencePosition:])
+		fmt.Fprintf(result, "%x", s[i][shard.TagBatchSequencePosition:])
 	}
 
 	result.WriteRune(']')

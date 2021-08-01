@@ -10,13 +10,13 @@ type TagPrototype [TagSize]byte
 // SetPadding updates tag with a padding value.
 func (t *TagPrototype) SetPadding(n uint32) {
 	binary.BigEndian.PutUint32(
-		t[TagPaddingPosition:TagBlockSequencePosition], n)
+		t[TagPaddingPosition:TagBatchSequencePosition], n)
 }
 
-// SetBlockSequence updates tag with a new block sequence.
-func (t *TagPrototype) SetBlockSequence(n uint32) {
+// SetBatchSequence updates tag with a new block sequence.
+func (t *TagPrototype) SetBatchSequence(n uint32) {
 	binary.BigEndian.PutUint32(
-		t[TagBlockSequencePosition:TagShardSequencePosition], n)
+		t[TagBatchSequencePosition:TagShardSequencePosition], n)
 }
 
 // SetShardSequence updates tag with a new shard sequence.

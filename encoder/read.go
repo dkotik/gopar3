@@ -5,12 +5,17 @@ import (
 	"io"
 )
 
-type batch struct {
+// Batch holds a group of required shards with added redundant shards.
+// The redundant shards are set initially to <nil> to be filled with
+// Reed-Solomon values. If there are not enough required shards,
+// additional shards are repetitions of the last. Padding represents
+// the number of bytes to discard when decoding the batch.
+type Batch struct {
 	shards  [][]byte
 	padding uint32
 }
 
-func (e *Encoder) readBatchOfShards(r io.Reader) (*batch, error) {
+func (e *Encoder) readBatchOfShards(r io.Reader) (*Batch, error) {
 	stack := make([][]byte, e.RequiredShards+e.RedundantShards)
 	var (
 		i           uint8
@@ -35,5 +40,5 @@ func (e *Encoder) readBatchOfShards(r io.Reader) (*batch, error) {
 		stack[j] = stack[i]
 		padding += morePadding
 	}
-	return &batch{stack, uint32(padding)}, nil
+	return &Batch{stack, uint32(padding)}, nil
 }
