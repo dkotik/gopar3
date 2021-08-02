@@ -1,14 +1,9 @@
 package encoder
 
 import (
-	"bytes"
-	"context"
 	"errors"
-	"hash"
-	"io"
 
 	"github.com/dkotik/gopar3/shard"
-	"github.com/dkotik/gopar3/telomeres"
 )
 
 const (
@@ -20,15 +15,16 @@ const (
 
 // Encoder adds data resiliency to its input.
 type Encoder struct {
-	RequiredShards  uint8
-	RedundantShards uint8
-	ChosenCheckSum  hash.Hash32
-
+	RequiredShards      uint8 // // TODO: private
+	RedundantShards     uint8 // // TODO: private
 	prototype           shard.TagPrototype
 	shardSize           int // TODO: replace with shard size // int64?
-	crossCheckFrequency uint
 	telomeresLength     int
-	w                   []io.Writer
+	telomeresBufferSize int
+	crossCheckFrequency uint
+	errc                chan (error)
+	// ChosenCheckSum  hash.Hash32
+	// w                   []io.Writer
 }
 
 // NewEncoder initializes the encoder with options. Default options are used, if no options were specified.
@@ -37,7 +33,9 @@ func NewEncoder(withOptions ...Option) (e *Encoder, err error) {
 		withOptions = []Option{WithDefaultOptions()}
 	}
 
-	e = &Encoder{}
+	e = &Encoder{
+		errc: make(chan (error)),
+	}
 	if err = WithOptions(withOptions...)(e); err != nil {
 		return nil, err
 	}
@@ -47,64 +45,4 @@ func NewEncoder(withOptions ...Option) (e *Encoder, err error) {
 	}
 
 	return nil, nil
-}
-
-// Encode uses a pipe pattern to split the contents of the reader into writers while encoding each block.
-func (e *Encoder) Encode(ctx context.Context, r io.Reader) (err error) {
-	// prepare writers
-
-	// Stage 1: read chunks
-	// read blocksize*RequiredShards of bytes
-	// pad to the required length
-
-	// Stage 2: create Reed-Solomon shards
-
-	// Stage 3: commit the shards to output
-
-	return nil
-}
-
-func (e *Encoder) commit(ctx context.Context, w io.Writer, stream <-chan (*bytes.Buffer)) (err error) {
-	t := telomeres.NewEncoder(w, e.telomeresLength, telomereEncoderBufferSize)
-	wcross := &checkSumWriter{t, nil}
-	wshard := &checkSumWriter{wcross, nil}
-
-	var i uint
-	for b := range stream {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if b == nil {
-			return nil // finished
-		}
-		if _, err = io.Copy(wshard, b); err != nil {
-			return err
-		}
-		if err = wshard.Cut(); err != nil {
-			return err
-		}
-		if _, err = t.Cut(); err != nil {
-			return err
-		}
-
-		i++
-		if i%e.crossCheckFrequency == 0 {
-			if err = wcross.Cut(); err != nil {
-				return err
-			}
-			if _, err = t.Cut(); err != nil {
-				return err
-			}
-		}
-	}
-	// final cross-check
-	if err = wcross.Cut(); err != nil {
-		return err
-	}
-	if _, err = t.Cut(); err != nil {
-		return err
-	}
-	return nil
 }

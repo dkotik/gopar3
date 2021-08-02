@@ -25,6 +25,8 @@ const (
 	MaxPadding = (1 << (8 * (TagBatchSequencePosition - TagPaddingPosition))) - 1
 	// MaxBlocks shows how many blocks can be encoded at most.
 	MaxBlocks = (1 << (8 * (TagShardSequencePosition - TagBatchSequencePosition)))
+	// MaxShardsPerBatch is constrained by klauspost/reedsolomon limit.
+	MaxShardsPerBatch = 256
 )
 
 // Tag holds the all the neccessary hints to perform full data reconstruction.
