@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"errors"
 	"hash"
 	"io"
 )
@@ -10,15 +9,12 @@ import (
 // NewDecoder constructs decoder.
 func NewDecoder(withOptions ...Option) (d *Decoder, err error) {
 	d = &Decoder{}
-
 	if err = WithOptions(withOptions...)(d); err != nil {
 		return nil, err
 	}
-
-	if d.checksumFactory == nil {
-		return nil, errors.New("decode must have a checksum provider")
+	if err = WithDefaultOptions()(d); err != nil {
+		return nil, err
 	}
-
 	return d, nil
 }
 

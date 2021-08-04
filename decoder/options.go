@@ -3,6 +3,8 @@ package decoder
 import (
 	"errors"
 	"hash"
+
+	"github.com/dkotik/gopar3/shard"
 )
 
 // Option configures the decoder.
@@ -17,6 +19,20 @@ func WithOptions(options ...Option) Option {
 			}
 		}
 		return nil
+	}
+}
+
+// WithDefaultOptions makes sure that all the missing values are set.
+func WithDefaultOptions() Option {
+	return func(d *Decoder) error {
+		defaults := make([]Option, 0)
+		if d.batchSize == 0 {
+			defaults = append(defaults, WithBatchSize(36))
+		}
+		if d.checksumFactory == nil {
+			defaults = append(defaults, WithChecksumFactory(shard.NewChecksum))
+		}
+		return WithOptions(defaults...)(d)
 	}
 }
 

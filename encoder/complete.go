@@ -6,7 +6,7 @@ import (
 
 // CompleteWithReedSolomon generates missing redundant shards.
 func (e *Encoder) CompleteWithReedSolomon(bb <-chan (*Batch)) <-chan (*Batch) {
-	req, red := int(e.RequiredShards), int(e.RedundantShards)
+	req, red := int(e.requiredShards), int(e.redundantShards)
 	out := make(chan (*Batch), 0)
 
 	go func() {

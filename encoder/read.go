@@ -46,14 +46,14 @@ func (e *Encoder) batchStream(r io.Reader) <-chan (*Batch) {
 }
 
 func (e *Encoder) readBatchOfShards(r io.Reader) (*Batch, error) {
-	stack := make([][]byte, e.RequiredShards+e.RedundantShards)
+	stack := make([][]byte, e.requiredShards+e.redundantShards)
 	var (
 		i           uint8
 		padding     int64
 		morePadding = int64(e.shardSize)
 		err         error
 	)
-	for ; i < e.RequiredShards; i++ {
+	for ; i < e.requiredShards; i++ {
 		b := &bytes.Buffer{}
 		if padding, err = io.CopyN(b, r, int64(e.shardSize)); err != nil {
 			if err == io.EOF {
@@ -68,7 +68,7 @@ func (e *Encoder) readBatchOfShards(r io.Reader) (*Batch, error) {
 	}
 
 	padding = morePadding - padding // turn written n into padding number
-	for j := i; j < e.RequiredShards; j++ {
+	for j := i; j < e.requiredShards; j++ {
 		// fill in any missing shards by copies of the last
 		stack[j] = stack[i]
 		padding += morePadding
