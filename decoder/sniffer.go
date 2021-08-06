@@ -1,25 +1,58 @@
 package decoder
 
 import (
+	"errors"
 	"fmt"
+
+	"github.com/dkotik/gopar3/shard"
 )
 
-// SniffDemocratically determines predominant shard tag qualities by taking the most popular tag values from a given set of slices. Start and end mark the common part of the slice.
-func SniffDemocratically(q [][]byte, start, end int) []byte {
+func (d *Decoder) Sniff(in chan ([]byte)) (stack [][]byte, popular []byte, err error) {
+	shards := make([][]byte, 0, d.sniffDepth)
+	// var i int
+	for i := uint16(0); i < d.sniffDepth; i++ {
+		shard := <-in
+		if shard == nil {
+			break
+		}
+		shards = append(shards, shard)
+	}
+	popular, err = SniffDemocratically(shards)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stack, popular, nil
+}
+
+// SniffDemocratically determines predominant shard tag qualities by taking the most popular tag values from a given set of slices.
+func SniffDemocratically(q [][]byte) ([]byte, error) {
+	length := len(q)
+	if length <= 5 {
+		return nil, errors.New("cannot use less than 5 shards to discover common values")
+	}
 	type rec struct {
 		Index int
-		Count uint16
+		Count int
+		// Length int
 	}
 
-	// count the values
+	// count similar values grouped by a slice and total length
 	cc := make(map[string]*rec)
 	for i := 0; i < len(q); i++ {
-		mark := fmt.Sprintf("%x", q[i][start:end]) // group by hex value
+		length := len(q[i])
+		if length < shard.TagSize+1 {
+			continue // skip over short byte slices
+		}
+		mark := fmt.Sprintf("%x::%d", q[i][length-shard.TagSize:length-4], len(q[i]))
 		if saved, ok := cc[mark]; ok {
 			saved.Count++
 			continue
 		}
-		cc[mark] = &rec{i, 1}
+		cc[mark] = &rec{
+			Index: i,
+			// Length: length,
+			Count: 1,
+		}
 	}
 
 	// spew.Dump(cc)
@@ -32,10 +65,10 @@ func SniffDemocratically(q [][]byte, start, end int) []byte {
 		}
 	}
 
-	if top == nil {
-		return nil
+	if top == nil || top.Count <= length/3 {
+		return nil, errors.New("there was not even a third of common values")
 	}
-	return q[top.Index]
+	return q[top.Index], nil
 }
 
 // func medianUint8(bunch []uint8) uint8 {

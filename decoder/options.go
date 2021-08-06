@@ -26,8 +26,11 @@ func WithOptions(options ...Option) Option {
 func WithDefaultOptions() Option {
 	return func(d *Decoder) error {
 		defaults := make([]Option, 0)
-		if d.batchSize == 0 {
-			defaults = append(defaults, WithBatchSize(36))
+		if d.maxShardSize == 0 {
+			defaults = append(defaults, WithMaxShardSize(2<<20*16))
+		}
+		if d.sniffDepth == 0 {
+			defaults = append(defaults, WithSniffDepth(36))
 		}
 		if d.checksumFactory == nil {
 			defaults = append(defaults, WithChecksumFactory(shard.NewChecksum))
@@ -36,16 +39,39 @@ func WithDefaultOptions() Option {
 	}
 }
 
-// WithBatchSize determines how many pieces are worked on at a time.
-func WithBatchSize(size int) Option {
+// WithSniffDepth determines how many pieces are worked on at a time.
+func WithSniffDepth(limit uint16) Option {
 	return func(d *Decoder) error {
-		if size < 9 {
+		if limit < 9 {
 			return errors.New("cannot work with less than 9 shards at a time")
 		}
-		d.batchSize = size
+		d.sniffDepth = limit
 		return nil
 	}
 }
+
+// WithSniffDepth determines how many pieces are worked on at a time.
+func WithMaxShardSize(limit int64) Option {
+	return func(d *Decoder) error {
+		if limit < shard.TagSize+1 {
+			return errors.New("cannot use less shard bytes than required for a tag")
+		}
+		d.maxShardSize = limit
+		return nil
+	}
+}
+
+// TODO: the batch is read from the tag
+// // WithBatchSize determines how many pieces are worked on at a time.
+// func WithBatchSize(size int) Option {
+// 	return func(d *Decoder) error {
+// 		if size < 9 {
+// 			return errors.New("cannot work with less than 9 shards at a time")
+// 		}
+// 		d.batchSize = size
+// 		return nil
+// 	}
+// }
 
 // WithChecksumFactory provides checksums for validating shards.
 func WithChecksumFactory(factory func() hash.Hash32) Option {

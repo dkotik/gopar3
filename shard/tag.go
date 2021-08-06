@@ -11,10 +11,10 @@ import (
 const (
 	// VersionBytePosition is first at 0.
 	TagBlockDifferentiatorPosition = 0 + 1
-	TagRequiredShardsPosition      = TagBlockDifferentiatorPosition + 6
+	TagRequiredShardsPosition      = TagBlockDifferentiatorPosition + 7
 	TagRedundantShardsPosition     = TagRequiredShardsPosition + 1
-	TagPaddingPosition             = TagRedundantShardsPosition + 4 // check?
-	TagBatchSequencePosition       = TagPaddingPosition + 2
+	TagPaddingPosition             = TagRedundantShardsPosition + 1
+	TagBatchSequencePosition       = TagPaddingPosition + 4
 	TagShardSequencePosition       = TagBatchSequencePosition + 4
 	TagChecksumPosition            = TagShardSequencePosition + 2
 
@@ -56,7 +56,7 @@ func (t *Tag) Write(b []byte) (n int, err error) {
 	b[TagRequiredShardsPosition] = byte(t.RequiredShards)
 	b[TagRedundantShardsPosition] = byte(t.RedundantShards)
 	// b[TagPaddingPosition] = byte(t.Padding)
-	binary.BigEndian.PutUint32(b[TagRedundantShardsPosition:TagPaddingPosition], t.Padding)
+	binary.BigEndian.PutUint32(b[TagPaddingPosition:TagBatchSequencePosition], t.Padding)
 	binary.BigEndian.PutUint32(b[TagBatchSequencePosition:TagShardSequencePosition], t.BlockSequence)
 	binary.BigEndian.PutUint16(b[TagShardSequencePosition:TagChecksumPosition], t.ShardSequence)
 	return 0, nil

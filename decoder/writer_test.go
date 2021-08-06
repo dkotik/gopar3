@@ -6,7 +6,9 @@ import (
 )
 
 func ExampleDecoder_WriteAll() {
-	d := &Decoder{}
+	d := &Decoder{
+		batchSize: 7,
+	}
 	in := make(chan ([][]byte))
 	go func() {
 		defer close(in)

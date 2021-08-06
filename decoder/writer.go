@@ -22,19 +22,22 @@ func (d *Decoder) WriteAll(w io.Writer, in <-chan ([][]byte)) error {
 		)
 		defer func() {
 			if err != nil {
-				err = fmt.Errorf("could not write piece №%d: %w", i, err)
+				err = fmt.Errorf("could not write shard №%d: %w", i, err)
 			}
 			errc <- err
 		}()
 
 		for batch := range in {
-			for _, piece := range batch {
-				n, err = io.Copy(w, bytes.NewReader(piece))
+			for i, shard := range batch {
+				if shard == nil || i > d.batchSize { // TODO: reduce limit to req size later
+					continue
+				}
+				n, err = io.Copy(w, bytes.NewReader(shard))
 				if err != nil {
 					return
 				}
-				if n != int64(len(piece)) { // TODO: is this needed?
-					err = errors.New("the entire piece did not fit")
+				if n != int64(len(shard)) { // TODO: is this needed?
+					err = errors.New("the entire shard did not fit")
 					return
 				}
 				i++
