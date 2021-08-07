@@ -7,8 +7,6 @@ import (
 	"io"
 )
 
-type shardFilter func([]byte) bool
-
 // NewDecoder constructs a decoder.
 func NewDecoder(withOptions ...Option) (d *Decoder, err error) {
 	d = &Decoder{}
@@ -23,51 +21,32 @@ func NewDecoder(withOptions ...Option) (d *Decoder, err error) {
 type Decoder struct {
 	batchSize       int
 	sniffDepth      uint16
+	requiredShards  uint8
+	redundantShards uint8
+	shardSize       int
 	maxShardSize    int64
 	checksumFactory func() hash.Hash32
-	shardFilter     shardFilter
+	shardFilter     func([]byte) bool // shard filter rejects shards that do not match the most popular sniff set tag signature
 	errc            chan (error)
 }
 
 // Decode reads the streams, orders shards, recovers data, and writes it out to destination writer.
 func (d *Decoder) Decode(ctx context.Context, w io.Writer, streams []io.Reader) (err error) {
 	in := make(chan ([]byte), d.sniffDepth)
-	err = func() error {
-		// move all of this inside sniff $$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-		stack, common, err := d.Sniff(in)
-		if err != nil {
-			return err
-		}
-		d.shardFilter = func() shardFilter {
-			func(a []byte) bool {
-			if len(a) != len(common) {
-				return false
-			}
-			// TODO: compare to common
-			return true
-		}
-		for _, shard := range stack {
-			if d.shardFilter(shard) {
-				in <- shard
-			}
-		}
-		return nil
-	}()
-	if err != nil {
-		return
+	defer close(in)
+
+	// TODO: launch consumers of in channel here, so they are ready for shards of the sniffer
+	batches := d.orderAndGroup(in)
+	complete := d.CompleteWithReedSolomon(batches)
+
+	if err = d.SniffAndSetupFilter(in, streams); err != nil {
+		return err
 	}
 	for _, r := range streams {
 		d.StartReading(r, in)
 	}
-	// pipe
-	// read streams concurrently while rejecting bad chunks
-	// discard chunks with less than tag's length +1
 
-	// order chunks and try to restore
-
-	// collect restored data and write it out
-
-	return
+	return d.WriteAll(w, complete) // TODO: add context?
 }
 
 func (d *Decoder) String() string {

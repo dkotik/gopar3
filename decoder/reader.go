@@ -25,6 +25,9 @@ func (d *Decoder) StartReading(r io.Reader, out chan<- ([]byte)) {
 				}
 				break
 			}
+			if !d.shardFilter(shard) {
+				continue
+			}
 			out <- shard
 		}
 	}()

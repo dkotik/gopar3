@@ -1,27 +1,59 @@
 package decoder
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/dkotik/gopar3/shard"
 )
 
-func (d *Decoder) Sniff(in chan ([]byte)) (stack [][]byte, popular []byte, err error) {
+func (d *Decoder) SniffAndSetupFilter(in chan<- ([]byte), streams []io.Reader) error {
 	shards := make([][]byte, 0, d.sniffDepth)
-	// var i int
+	streamCount := uint16(len(streams))
 	for i := uint16(0); i < d.sniffDepth; i++ {
-		shard := <-in
-		if shard == nil {
-			break
+		shard, err := d.ReadShard(streams[i%streamCount])
+		if err != nil {
+			return err
 		}
 		shards = append(shards, shard)
 	}
-	popular, err = SniffDemocratically(shards)
+
+	// which shard tag signature is most common amoung the sniff set?
+	popular, err := SniffDemocratically(shards)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	return stack, popular, nil
+
+	lengthRequirement := len(popular)
+	tagMatcher := make([]byte, shard.TagPaddingPosition, shard.TagPaddingPosition)
+	n := copy(tagMatcher, popular[lengthRequirement-shard.TagSize+4:])
+	if n != shard.TagPaddingPosition {
+		return errors.New("could not set up a tag matcher for shard filter")
+	}
+
+	// shard filter rejects shards that do not match the most popular sniff set tag signature
+	// TODO: should move it into its own function, just syncronize the parameters
+	d.shardFilter = func(a []byte) bool {
+		if len(a) != lengthRequirement {
+			// TODO: broadcast event or use errc like in StartReading
+			return false
+		}
+		pos := lengthRequirement - shard.TagSize + 4
+		if bytes.Compare(tagMatcher, a[pos:pos+shard.TagPaddingPosition]) != 0 {
+			// TODO: broadcast event or use errc like in StartReading
+			return false
+		}
+		return true
+	}
+
+	for _, shard := range shards {
+		if d.shardFilter(shard) {
+			in <- shard
+		}
+	}
+	return nil
 }
 
 // SniffDemocratically determines predominant shard tag qualities by taking the most popular tag values from a given set of slices.
@@ -70,17 +102,3 @@ func SniffDemocratically(q [][]byte) ([]byte, error) {
 	}
 	return q[top.Index], nil
 }
-
-// func medianUint8(bunch []uint8) uint8 {
-// 	sort.Slice(bunch, func(i int, j int) bool {
-// 		return bunch[i] > bunch[j]
-// 	})
-// 	return bunch[len(bunch)/2]
-// }
-//
-// func medianUint16(bunch []uint16) uint16 {
-// 	sort.Slice(bunch, func(i int, j int) bool {
-// 		return bunch[i] > bunch[j]
-// 	})
-// 	return bunch[len(bunch)/2]
-// }

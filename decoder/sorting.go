@@ -2,64 +2,87 @@ package decoder
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"sort"
+
+	"github.com/dkotik/gopar3/shard"
 )
 
-func (d *Decoder) orderAndGroup(
-	in []<-chan ([]byte), out chan<- ([][]byte),
-) (err error) {
-	queue := make([][]byte, d.batchSize*2)
-
-	var i, c, count int
-	for {
-		for i = 0; i < d.batchSize; i++ {
-			for c = 0; c < len(in); c++ {
-				select { // non-blocking take
-				case queue[count] = <-in[c]:
-					if queue[count] != nil {
-						count++
-					}
-				default:
-				}
-			}
-		}
-
-		if count == 0 {
-			break // no more data is coming
-		}
-		SortDescending(queue)
-
-		// determine shard count once // TODO: auto
-		shards := 9 // TODO: auto
-		limit := count - shards
-		if limit < 0 {
-			limit = 0
-		}
-		out <- queue[limit:count]                       // next stage
-		queue = append(queue[:limit], queue[count:]...) // drop the used part
+func createFilterByBlock(block uint32, expectedLength int) func([]byte) bool {
+	matcher := make([]byte, 4)
+	binary.BigEndian.PutUint32(matcher, block)
+	return func(b []byte) bool {
+		return bytes.Compare(b[shard.TagBatchSequencePosition:shard.TagShardSequencePosition], matcher) == 0
 	}
-
-	return nil
 }
 
-func (d *Decoder) SortAndBatch(in <-chan ([]byte)) chan<- ([][]byte) {
-	out := make(chan ([][]byte), d.batchSize)
-	go func() {
-		shards := make([][]byte, 0, d.batchSize*3)
-		// TODO: instead of next loop,
-		// 			// write a loop to fill up the shards, sort it, try to batch, repeat
-		for shard := range in {
-			// TODO: if does not match what we are looking for, append to shards
+func (d *Decoder) selectRelatedShards(block uint32, q [][]byte) ([][]byte, error) {
+	shards := make([][]byte, d.batchSize)
+	var shardSequence int
+	nfiltered := 0
+	found := 0
+	var duplicationTest, tag []byte
+	filter := createFilterByBlock(block, d.shardSize)
 
-			// if matched, feed to out
-			out <- [][]byte{shard}
-			// sort the shards?
-			// feed them one by one if match
-			for _, shard = range shards {
-				out <- [][]byte{shard}
+	// TODO: make sure q is not sorted backwards, so getting the right shards first
+	for _, s := range q {
+		tag = s[len(s)-shard.TagSize-4:] // shard.TagSize-4
+		if filter(tag) {
+			shardSequence = int(tag[shard.TagShardSequencePosition])
+			if duplicationTest = shards[shardSequence]; duplicationTest != nil {
+				return nil, fmt.Errorf("shard #%d-%d is duplicated", block, shardSequence)
 			}
+			shards[shardSequence] = s
+			found++
+			if found == d.batchSize {
+				break
+			}
+			continue
 		}
-		close(out)
+		q[nfiltered] = s
+		nfiltered++
+	}
+
+	// if found < d.requiredShards {
+	// 	return nil, fmt.Errorf("block #%d contains only %d/%d required shards", block, found, d.requiredShards)
+	// }
+
+	q = q[:nfiltered]
+	return shards, nil
+}
+
+func (d *Decoder) orderAndGroup(in <-chan ([]byte)) <-chan ([][]byte) {
+	out := make(chan ([][]byte))
+	go func() {
+		defer close(out)
+		var (
+			depth   = int(d.sniffDepth)
+			queue   = make([][]byte, depth)
+			current []byte
+			batch   [][]byte
+			i       int
+			block   uint32
+			err     error
+		)
+
+		for {
+			for i = len(queue); i < depth; i++ {
+				current = <-in
+				if current == nil {
+					break
+				}
+				queue[i] = current
+			}
+
+			SortDescending(queue)
+			batch, err = d.selectRelatedShards(block, queue)
+			if err != nil {
+				panic(err) // TODO: pass gracefully, close out channel?
+			}
+			out <- batch
+			block++
+		}
 	}()
 	return out
 }
