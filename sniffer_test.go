@@ -1,4 +1,4 @@
-package decoder
+package gopar3
 
 import (
 	"crypto/rand"
@@ -32,16 +32,24 @@ func TestSniffDemocratically(t *testing.T) {
 		q[i], q[j] = q[j], q[i]
 	})
 
-	common, err := SniffDemocratically(q)
-	if err != nil {
-		t.Fatal(err)
+	sniffer := &Sniffer{
+		Differentiator: TagDifferentiator,
+		Samples:        make(map[string]*SnifferSample),
 	}
-	popular := fmt.Sprintf("%x", common)
-	if popular != original {
+	for _, v := range q {
+		sniffer.Sample(v)
+	}
+
+	popular, frequency := sniffer.GetPopular()
+	captured := fmt.Sprintf("%x", popular)
+	if popular == nil || frequency != 11 { // 10 is the expected number of matches
+		t.Fatal("could not determine popular shard", captured, frequency)
+	}
+	if captured != original {
 		for i := 0; i < len(q); i++ {
 			t.Logf("%x", q[i])
 		}
 
-		t.Fatal("values do not match", popular, original)
+		t.Fatal("values do not match", captured, original)
 	}
 }

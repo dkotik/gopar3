@@ -9,6 +9,8 @@ import (
 	"github.com/dkotik/gopar3/shard"
 )
 
+// TODO: moving all of this to gopar3 Reader
+
 var (
 	ErrShardTooSmall = errors.New("the shard is too small to contain a tag")
 	ErrShardBroken   = errors.New("the shard is broken, hashes do not match")

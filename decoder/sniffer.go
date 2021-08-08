@@ -56,7 +56,6 @@ func (d *Decoder) SniffAndSetupFilter(in chan<- ([]byte), streams []io.Reader) e
 	return nil
 }
 
-// SniffDemocratically determines predominant shard tag qualities by taking the most popular tag values from a given set of slices.
 func SniffDemocratically(q [][]byte) ([]byte, error) {
 	length := len(q)
 	if length <= 5 {
@@ -65,7 +64,6 @@ func SniffDemocratically(q [][]byte) ([]byte, error) {
 	type rec struct {
 		Index int
 		Count int
-		// Length int
 	}
 
 	// count similar values grouped by a slice and total length
@@ -82,7 +80,6 @@ func SniffDemocratically(q [][]byte) ([]byte, error) {
 		}
 		cc[mark] = &rec{
 			Index: i,
-			// Length: length,
 			Count: 1,
 		}
 	}

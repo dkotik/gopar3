@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	// TODO: SDTIN SDTOUT flags
 	fragments   = flag.UintP("fragments", "f", 9, "break input into this many parts")
 	growth      = flag.Float64P("growth", "g", 1.3, "all fragments together will take up this much\nmore space than the input")
 	telomeres   = flag.UintP("telomeres", "t", 8, "length of telomere padding protecting\nshard boundaries more padding increases\noutput resilience")
@@ -26,7 +27,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err.Error())
 			return
 		}
-		fmt.Fprintf(os.Stderr, "gopar3 v%s data resilience utility\n\n  gopar3 [encode|decode] [FILE] [FLAGS]\n\n", gopar3.Version)
+		fmt.Fprintf(os.Stderr, "gopar3 v%s data resilience utility\n\n  gopar3 [encode|decode|inspect] [FILE] [FLAGS]\n\n", gopar3.Version)
 		flag.PrintDefaults()
 	}
 
@@ -41,6 +42,8 @@ func main() {
 			return
 		case "decode":
 			// *memoryLimit * 1024 * 1024
+			return
+		case "inspect":
 			return
 		case "version":
 			fmt.Fprintf(os.Stderr, "gopar3 v%s\n", gopar3.Version)
