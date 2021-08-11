@@ -8,7 +8,7 @@ import (
 	"hash"
 	"io"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3/telomeres"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 
 // func NewReader(r io.Reader, withOptions ...ReaderOption) (*Reader, error) {
 // 	reader := &Reader{
-// 		source: telomeres.NewDecoder(r, 4, 24, 2<<10),
+// 		source: telomeres.NewDecoder(r, 4, 24, 2<<8),
 // 	}
 // 	withOptions = append(withOptions, WithReaderDefaultOptions())
 // 	if err := WithReaderOptions(withOptions...)(reader); err != nil {
@@ -35,19 +35,24 @@ type Scanner struct {
 }
 
 // Pipe transfers valid shards to the out channel. Checksum is truncated.
-func (s *Scanner) Pipe(ctx context.Context, r io.Reader, out chan<- ([]byte)) {
+func (s *Scanner) Pipe(ctx context.Context, r *telomeres.Decoder, out chan<- ([]byte)) {
 	go func() {
 		var i uint64 = 1
 		for {
 			shard, err := s.NextShard(r)
-			if err != nil {
-				if err != io.EOF {
-					if !s.ErrorHandler(
-						fmt.Errorf("could not accept shard №%d: %w", i, err)) {
-						break
-					}
+			// spew.Dump(err, string(shard))
+			switch err {
+			case ErrShardTooSmall:
+				continue
+			case telomeres.ErrEndReached:
+				break
+			case nil:
+				// ignore
+			default:
+				if !s.ErrorHandler(
+					fmt.Errorf("could not accept shard №%d: %w", i, err)) {
+					break
 				}
-				break // stop on end of file
 			}
 			select {
 			case <-ctx.Done():
@@ -62,17 +67,21 @@ func (s *Scanner) Pipe(ctx context.Context, r io.Reader, out chan<- ([]byte)) {
 func (s *Scanner) NextShard(r io.Reader) ([]byte, error) {
 	buffer := &bytes.Buffer{}
 	n, err := io.CopyN(buffer, r, s.MaxBytesBeforeGivingUp)
+	if err == io.EOF {
+		err = nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	if n <= shard.TagSize {
+	if n < TagSize {
 		return nil, ErrShardTooSmall
 	}
 
 	b := buffer.Bytes()
 	checksumPosition := buffer.Len() - 4
 	cs := s.ChecksumFactory()
-	if bytes.Compare(cs.Sum(b[:checksumPosition]), b[checksumPosition:]) != 0 {
+	cs.Write(b[:checksumPosition])
+	if bytes.Compare(cs.Sum(nil), b[checksumPosition:]) != 0 {
 		return nil, ErrShardBroken
 	}
 	// if err = s.Validator(b); err != nil {

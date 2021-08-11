@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 )
 
 func createFilterByBlock(block uint32, expectedLength int) func([]byte) bool {
 	matcher := make([]byte, 4)
 	binary.BigEndian.PutUint32(matcher, block)
 	return func(b []byte) bool {
-		return bytes.Compare(b[shard.TagBatchSequencePosition:shard.TagShardSequencePosition], matcher) == 0
+		return bytes.Compare(b[gopar3.TagBatchSequencePosition:gopar3.TagShardSequencePosition], matcher) == 0
 	}
 }
 
@@ -27,9 +27,9 @@ func (d *Decoder) selectRelatedShards(block uint32, q [][]byte) ([][]byte, error
 
 	// TODO: make sure q is not sorted backwards, so getting the right shards first
 	for _, s := range q {
-		tag = s[len(s)-shard.TagSize-4:] // shard.TagSize-4
+		tag = s[len(s)-gopar3.TagSize-4:] // gopar3.TagSize-4
 		if filter(tag) {
-			shardSequence = int(tag[shard.TagShardSequencePosition])
+			shardSequence = int(tag[gopar3.TagShardSequencePosition])
 			if duplicationTest = shards[shardSequence]; duplicationTest != nil {
 				return nil, fmt.Errorf("shard #%d-%d is duplicated", block, shardSequence)
 			}

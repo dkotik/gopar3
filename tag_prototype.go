@@ -1,4 +1,4 @@
-package shard
+package gopar3
 
 import (
 	"encoding/binary"

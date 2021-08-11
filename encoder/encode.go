@@ -6,7 +6,7 @@ import (
 )
 
 func (e *Encoder) EncodeFile(p string) error {
-	// if padding > int(^uint16(0)) { // see const shard.MaxPadding
+	// if padding > int(^uint16(0)) { // see const gopar3.MaxPadding
 	// 	// TODO: cannot have more than 65535 padding,
 	// 	// which means 65535 / 256 = 255 maxShardsize
 	// 	// which is VERY limiting

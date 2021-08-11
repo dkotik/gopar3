@@ -5,12 +5,10 @@ import (
 	"fmt"
 	orand "math/rand"
 	"testing"
-
-	"github.com/dkotik/gopar3/shard"
 )
 
 func TestSniffDemocratically(t *testing.T) {
-	var b [shard.TagSize + 1]byte
+	var b [TagSize + 1]byte
 	shuffle := func() {
 		_, err := rand.Read(b[:])
 		if err != nil {

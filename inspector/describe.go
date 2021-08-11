@@ -3,12 +3,12 @@ package inspector
 import (
 	"strings"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 )
 
 type Description struct {
 	Corrupted bool
-	Tag       *shard.Tag
+	Tag       *gopar3.Tag
 }
 
 func (d *Description) String() string {

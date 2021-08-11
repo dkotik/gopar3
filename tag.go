@@ -1,7 +1,8 @@
-package shard
+package gopar3
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math/rand"
 	"time"
@@ -67,4 +68,11 @@ func (t *Tag) Prototype() TagPrototype {
 	var result TagPrototype
 	t.Write(result[:])
 	return result
+}
+
+func IsPossible(shards uint8, shardSize uint64) error {
+	if more := uint64(shards)*shardSize - MaxPadding; more > 0 {
+		return fmt.Errorf("exceeding possible by %d", more)
+	}
+	return nil
 }

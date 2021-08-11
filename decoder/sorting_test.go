@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/dkotik/gopar3"
-	"github.com/dkotik/gopar3/shard"
 )
 
 const (
 	shards = 60
-	cutoff = shard.TagChecksumPosition
+	cutoff = gopar3.TagChecksumPosition
 )
 
-func makeShards(tag *shard.Tag) [][]byte {
+func makeShards(tag *gopar3.Tag) [][]byte {
 	proto := tag.Prototype()
 	sl := make([][]byte, shards)
 	var shardn uint8
@@ -39,8 +38,8 @@ func makeShards(tag *shard.Tag) [][]byte {
 }
 
 func TestSort(t *testing.T) {
-	// generate some tags using shard.Protype
-	tag := &shard.Tag{
+	// generate some tags using gopar3.Protype
+	tag := &gopar3.Tag{
 		Version:         gopar3.VersionByte,
 		RequiredShards:  9,
 		RedundantShards: 3,
@@ -71,7 +70,7 @@ func shardsToString(s [][]byte) string {
 
 	for i := 0; i < len(s); i++ {
 		result.WriteRune('\n')
-		fmt.Fprintf(result, "%x", s[i][shard.TagBatchSequencePosition:])
+		fmt.Fprintf(result, "%x", s[i][gopar3.TagBatchSequencePosition:])
 	}
 
 	result.WriteRune(']')

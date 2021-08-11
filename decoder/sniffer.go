@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 )
 
 func (d *Decoder) SniffAndSetupFilter(in chan<- ([]byte), streams []io.Reader) error {
@@ -27,9 +27,9 @@ func (d *Decoder) SniffAndSetupFilter(in chan<- ([]byte), streams []io.Reader) e
 	}
 
 	lengthRequirement := len(popular)
-	tagMatcher := make([]byte, shard.TagPaddingPosition, shard.TagPaddingPosition)
-	n := copy(tagMatcher, popular[lengthRequirement-shard.TagSize+4:])
-	if n != shard.TagPaddingPosition {
+	tagMatcher := make([]byte, gopar3.TagPaddingPosition, gopar3.TagPaddingPosition)
+	n := copy(tagMatcher, popular[lengthRequirement-gopar3.TagSize+4:])
+	if n != gopar3.TagPaddingPosition {
 		return errors.New("could not set up a tag matcher for shard filter")
 	}
 
@@ -40,8 +40,8 @@ func (d *Decoder) SniffAndSetupFilter(in chan<- ([]byte), streams []io.Reader) e
 			// TODO: broadcast event or use errc like in StartReading
 			return false
 		}
-		pos := lengthRequirement - shard.TagSize + 4
-		if bytes.Compare(tagMatcher, a[pos:pos+shard.TagPaddingPosition]) != 0 {
+		pos := lengthRequirement - gopar3.TagSize + 4
+		if bytes.Compare(tagMatcher, a[pos:pos+gopar3.TagPaddingPosition]) != 0 {
 			// TODO: broadcast event or use errc like in StartReading
 			return false
 		}
@@ -70,10 +70,10 @@ func SniffDemocratically(q [][]byte) ([]byte, error) {
 	cc := make(map[string]*rec)
 	for i := 0; i < len(q); i++ {
 		length := len(q[i])
-		if length < shard.TagSize+1 {
+		if length < gopar3.TagSize+1 {
 			continue // skip over short byte slices
 		}
-		mark := fmt.Sprintf("%x::%d", q[i][length-shard.TagSize:length-4], len(q[i]))
+		mark := fmt.Sprintf("%x::%d", q[i][length-gopar3.TagSize:length-4], len(q[i]))
 		if saved, ok := cc[mark]; ok {
 			saved.Count++
 			continue

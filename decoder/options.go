@@ -4,7 +4,7 @@ import (
 	"errors"
 	"hash"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 )
 
 // Option configures the decoder.
@@ -33,7 +33,7 @@ func WithDefaultOptions() Option {
 			defaults = append(defaults, WithSniffDepth(36))
 		}
 		if d.checksumFactory == nil {
-			defaults = append(defaults, WithChecksumFactory(shard.NewChecksum))
+			defaults = append(defaults, WithChecksumFactory(gopar3.NewChecksum))
 		}
 		return WithOptions(defaults...)(d)
 	}
@@ -53,7 +53,7 @@ func WithSniffDepth(limit uint16) Option {
 // WithSniffDepth determines how many pieces are worked on at a time.
 func WithMaxShardSize(limit int64) Option {
 	return func(d *Decoder) error {
-		if limit < shard.TagSize+1 {
+		if limit < gopar3.TagSize+1 {
 			return errors.New("cannot use less shard bytes than required for a tag")
 		}
 		d.maxShardSize = limit

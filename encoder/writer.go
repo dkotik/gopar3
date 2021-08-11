@@ -5,12 +5,12 @@ import (
 	"errors"
 	"io"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 	"github.com/dkotik/gopar3/telomeres"
 )
 
 var (
-	// ErrShardDidNotFit triggers when there are not enough bytes to write the entire shard.
+	// ErrShardDidNotFit triggers when there are not enough bytes to write the entire gopar3.
 	ErrShardDidNotFit = errors.New("failed to write the entire shard")
 	// ErrShardTagDidNotFit triggers when there are not enough bytes to write the entire shard tag.
 	ErrShardTagDidNotFit = errors.New("failed to write the entire shard tag")
@@ -18,18 +18,18 @@ var (
 
 // Writer streams encoded shards into an underlying writer.
 type Writer struct {
-	TagPrototype shard.TagPrototype
+	TagPrototype gopar3.TagPrototype
 	t            *telomeres.Encoder
 	c            *checkSumWriter
 }
 
 // NewWriter sets up a nested encoder for commiting shards to IO.
-func (e *Encoder) NewWriter(w io.Writer, proto shard.TagPrototype) *Writer {
+func (e *Encoder) NewWriter(w io.Writer, proto gopar3.TagPrototype) *Writer {
 	telw := telomeres.NewEncoder(w, e.telomeresLength, e.telomeresBufferSize)
 	return &Writer{
 		TagPrototype: proto,
 		t:            telw,
-		c:            &checkSumWriter{telw, shard.NewChecksum()},
+		c:            &checkSumWriter{telw, gopar3.NewChecksum()},
 	}
 }
 
@@ -48,11 +48,11 @@ func (w *Writer) Write(b []byte) (n int, err error) {
 	if err != nil {
 		return
 	}
-	if int(j) != shard.TagSize {
+	if int(j) != gopar3.TagSize {
 		return n, ErrShardTagDidNotFit
 	}
 
-	c := shard.NewChecksum()
+	c := gopar3.NewChecksum()
 	if _, err = w.c.Write(c.Sum(b)); err != nil {
 		return n, err
 	}

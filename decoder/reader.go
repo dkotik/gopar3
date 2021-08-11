@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 )
 
 // TODO: moving all of this to gopar3 Reader
@@ -41,7 +41,7 @@ func (d *Decoder) ReadShard(r io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if n < shard.TagSize {
+	if n < gopar3.TagSize {
 		return nil, ErrShardTooSmall
 	}
 

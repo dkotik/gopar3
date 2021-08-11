@@ -3,14 +3,14 @@ package encoder
 import (
 	"errors"
 
-	"github.com/dkotik/gopar3/shard"
+	"github.com/dkotik/gopar3"
 )
 
 // Encoder adds data resiliency to its input.
 type Encoder struct {
 	requiredShards      uint8
 	redundantShards     uint8
-	prototype           shard.TagPrototype
+	prototype           gopar3.TagPrototype
 	shardSize           int // TODO: replace with shard size // int64?
 	telomeresLength     int
 	telomeresBufferSize int

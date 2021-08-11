@@ -98,6 +98,7 @@ func (t *Decoder) Read(b []byte) (n int, err error) {
 	boundary += t.boundary // add the number from previous iteration
 
 	if boundary >= t.minimum {
+		// t.window = t.window[boundary-t.boundary:] // TODO: check this, basically a skip
 		t.boundary = 0
 		return 0, io.EOF
 	}
