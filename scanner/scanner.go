@@ -1,45 +1,45 @@
-package gopar3
+package scanner
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 
 	"github.com/dkotik/gopar3/telomeres"
 )
 
 var (
-	ErrShardTooSmall = errors.New("the shard is too small to contain a tag")
+	ErrShardTooSmall = errors.New("the shard is too small to contain a checksum")
 	ErrShardBroken   = errors.New("the shard is broken, hashes do not match")
 )
 
-// func NewReader(r io.Reader, withOptions ...ReaderOption) (*Reader, error) {
-// 	reader := &Reader{
-// 		source: telomeres.NewDecoder(r, 4, 24, 2<<8),
-// 	}
-// 	withOptions = append(withOptions, WithReaderDefaultOptions())
-// 	if err := WithReaderOptions(withOptions...)(reader); err != nil {
-// 		return nil, err
-// 	}
-// 	return reader, nil
-// }
+func NewScanner(r *telomeres.Decoder, withOptions ...Option) (*Scanner, error) {
+	s := &Scanner{
+		telomeresDecoder: r, // telomeres.NewDecoder(r, 4, 24, 2<<8),
+	}
+	withOptions = append(withOptions, WithDefaultOptions())
+	if err := WithOptions(withOptions...)(s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
 
 type Scanner struct {
-	MaxBytesBeforeGivingUp int64
-	ChecksumFactory        func() hash.Hash32
-	ErrorHandler           func(error) bool
+	telomeresDecoder *telomeres.Decoder
+	maxBytesPerShard int64
+	checksumFactory  ChecksumFactory
+	errorHandler     func(error) bool
+	sequence         uint64
 	// Validator              func([]byte) error // TODO: not really needed here
 }
 
 // Pipe transfers valid shards to the out channel. Checksum is truncated.
-func (s *Scanner) Pipe(ctx context.Context, r *telomeres.Decoder, out chan<- ([]byte)) {
+func (s *Scanner) Pipe(ctx context.Context, out chan<- ([]byte)) {
 	go func() {
-		var i uint64 = 1
 		for {
-			shard, err := s.NextShard(r)
+			shard, err := s.NextShard()
 			// spew.Dump(err, string(shard))
 			switch err {
 			case ErrShardTooSmall:
@@ -49,8 +49,8 @@ func (s *Scanner) Pipe(ctx context.Context, r *telomeres.Decoder, out chan<- ([]
 			case nil:
 				// ignore
 			default:
-				if !s.ErrorHandler(
-					fmt.Errorf("could not accept shard №%d: %w", i, err)) {
+				if !s.errorHandler(
+					fmt.Errorf("could not accept shard №%d: %w", s.sequence, err)) {
 					break
 				}
 			}
@@ -58,28 +58,29 @@ func (s *Scanner) Pipe(ctx context.Context, r *telomeres.Decoder, out chan<- ([]
 			case <-ctx.Done():
 				break
 			case out <- shard:
-				i++
+				// continue
 			}
 		}
 	}()
 }
 
-func (s *Scanner) NextShard(r io.Reader) ([]byte, error) {
+func (s *Scanner) NextShard() ([]byte, error) {
 	buffer := &bytes.Buffer{}
-	n, err := io.CopyN(buffer, r, s.MaxBytesBeforeGivingUp)
+	n, err := io.CopyN(buffer, s.telomeresDecoder, s.maxBytesPerShard)
 	if err == io.EOF {
 		err = nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if n < TagSize {
+	s.sequence++
+	if n < 5 { // length of checksum, plus one byte
 		return nil, ErrShardTooSmall
 	}
 
 	b := buffer.Bytes()
 	checksumPosition := buffer.Len() - 4
-	cs := s.ChecksumFactory()
+	cs := s.checksumFactory()
 	cs.Write(b[:checksumPosition])
 	if bytes.Compare(cs.Sum(nil), b[checksumPosition:]) != 0 {
 		return nil, ErrShardBroken

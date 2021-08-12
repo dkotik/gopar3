@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dkotik/gopar3"
+	"github.com/dkotik/gopar3/scanner"
 )
 
 // https://www.scadacore.com/tools/programming-calculators/online-checksum-calculator/
@@ -22,7 +22,7 @@ func TestCheckSumWriter(t *testing.T) {
 	}
 
 	b := &bytes.Buffer{}
-	w := &checkSumWriter{b, gopar3.NewChecksum()}
+	w := &checkSumWriter{b, scanner.NewChecksum()}
 	var c [4]byte
 	for _, cs := range cases {
 		w.checksum.Reset()

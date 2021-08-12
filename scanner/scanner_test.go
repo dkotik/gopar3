@@ -1,4 +1,4 @@
-package gopar3
+package scanner
 
 import (
 	"bytes"
@@ -23,10 +23,12 @@ func ExampleScanner_Pipe() {
 	}
 	// panic(shards)
 
-	scanner := &Scanner{
-		MaxBytesBeforeGivingUp: 2 << 8,
-		ChecksumFactory:        NewChecksum,
-		ErrorHandler: func(err error) bool {
+	decoder := telomeres.NewDecoder(shards, 3, 8, 2<<8)
+	scanner := &Scanner{ // TODO: replace with NewScanner
+		telomeresDecoder: decoder,
+		maxBytesPerShard: 2 << 8,
+		checksumFactory:  NewChecksum,
+		errorHandler: func(err error) bool {
 			// panic(err)
 			fmt.Println("Error:", err)
 			return true
@@ -34,8 +36,7 @@ func ExampleScanner_Pipe() {
 	}
 	out := make(chan ([]byte))
 
-	decoder := telomeres.NewDecoder(shards, 3, 8, 2<<8)
-	scanner.Pipe(context.Background(), decoder, out)
+	scanner.Pipe(context.Background(), out)
 	time.Sleep(time.Second)
 	for i := 0; i < 4; i++ {
 		fmt.Printf("%s\n", <-out)

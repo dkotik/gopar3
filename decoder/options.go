@@ -5,6 +5,7 @@ import (
 	"hash"
 
 	"github.com/dkotik/gopar3"
+	"github.com/dkotik/gopar3/scanner"
 )
 
 // Option configures the decoder.
@@ -33,7 +34,7 @@ func WithDefaultOptions() Option {
 			defaults = append(defaults, WithSniffDepth(36))
 		}
 		if d.checksumFactory == nil {
-			defaults = append(defaults, WithChecksumFactory(gopar3.NewChecksum))
+			defaults = append(defaults, WithChecksumFactory(scanner.NewChecksum))
 		}
 		return WithOptions(defaults...)(d)
 	}

@@ -1,14 +1,16 @@
-package gopar3
+package scanner
 
 import (
 	"crypto/rand"
 	"fmt"
 	orand "math/rand"
 	"testing"
+
+	"github.com/dkotik/gopar3"
 )
 
 func TestSniffDemocratically(t *testing.T) {
-	var b [TagSize + 1]byte
+	var b [gopar3.TagSize + 1]byte
 	shuffle := func() {
 		_, err := rand.Read(b[:])
 		if err != nil {
@@ -38,10 +40,10 @@ func TestSniffDemocratically(t *testing.T) {
 		sniffer.Sample(v)
 	}
 
-	popular, frequency := sniffer.GetPopular()
-	captured := fmt.Sprintf("%x", popular)
-	if popular == nil || frequency != 11 { // 10 is the expected number of matches
-		t.Fatal("could not determine popular shard", captured, frequency)
+	sample := sniffer.GetPopular()
+	captured := fmt.Sprintf("%x", sample.Popular)
+	if sample.Popular == nil || sample.Frequency != 11 { // 10 is the expected number of matches
+		t.Fatal("could not determine popular shard", captured, sample.Frequency)
 	}
 	if captured != original {
 		for i := 0; i < len(q); i++ {

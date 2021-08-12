@@ -1,16 +1,26 @@
-package gopar3
+package scanner
 
-import "fmt"
+import (
+	"fmt"
+)
 
-func TagDifferentiator(shard []byte) (group string) {
-	length := len(shard)
-	return fmt.Sprintf("%x^%d", shard[length-24:length-14], length) // TODO: update with tag positions after shard is refactored in
-}
+// some collected samples can be nil
+// func SniffGroupingByTag(s *Scanner, samples uint8) ([][]byte, *SnifferSample, error) {
+// 	var err error
+// 	length := int(samples)
+// 	collected := make([][]byte, 0, length)
+// 	for i := 0; i < length; i++ {
+// 		collected[i], err = s.NextShard()
+// 		if err != nil {
+// 			continue
+// 		}
+// 	}
+// }
 
 // SnifferSample tracks the frequency of a shard and others similar to it.
 type SnifferSample struct {
-	ShardMayBePopular []byte
-	Frequency         uint8
+	Popular   []byte
+	Frequency uint8
 }
 
 // Sniffer applies Differentiator to group collected samples, so that the most popular type can be selected later.
@@ -27,21 +37,26 @@ func (s *Sniffer) Sample(shard []byte) {
 		return
 	}
 	s.Samples[group] = &SnifferSample{
-		ShardMayBePopular: shard,
-		Frequency:         1,
+		Popular:   shard,
+		Frequency: 1,
 	}
 }
 
 // GetPopular determines predominant shard qualities by taking the most popular sampled values grouped by Differentiator.
-func (s *Sniffer) GetPopular() (shard []byte, frequency uint8) {
+func (s *Sniffer) GetPopular() *SnifferSample {
 	top := &SnifferSample{
-		ShardMayBePopular: nil,
-		Frequency:         0,
+		Popular:   nil,
+		Frequency: 0,
 	}
 	for _, v := range s.Samples {
 		if top.Frequency < v.Frequency {
 			top = v
 		}
 	}
-	return top.ShardMayBePopular, top.Frequency
+	return top
+}
+
+func TagDifferentiator(shard []byte) (group string) {
+	length := len(shard)
+	return fmt.Sprintf("%x^%d", shard[length-24:length-14], length) // TODO: update with tag positions after shard is refactored in
 }

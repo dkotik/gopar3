@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/dkotik/gopar3"
+	"github.com/dkotik/gopar3/scanner"
 	"github.com/dkotik/gopar3/telomeres"
 )
 
@@ -29,7 +30,7 @@ func (e *Encoder) NewWriter(w io.Writer, proto gopar3.TagPrototype) *Writer {
 	return &Writer{
 		TagPrototype: proto,
 		t:            telw,
-		c:            &checkSumWriter{telw, gopar3.NewChecksum()},
+		c:            &checkSumWriter{telw, scanner.NewChecksum()},
 	}
 }
 
@@ -52,7 +53,7 @@ func (w *Writer) Write(b []byte) (n int, err error) {
 		return n, ErrShardTagDidNotFit
 	}
 
-	c := gopar3.NewChecksum()
+	c := scanner.NewChecksum()
 	if _, err = w.c.Write(c.Sum(b)); err != nil {
 		return n, err
 	}
