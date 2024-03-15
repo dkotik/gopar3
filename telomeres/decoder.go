@@ -34,6 +34,9 @@ func (t *Telomeres) NewDecoder(
 	}
 }
 
+// WriteTo streams the next data chunk into a writer according
+// to [io.WriterTo] expectations. Returns [io.EOF] if
+// no more data chunks are coming.
 func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 	var (
 		n          int
@@ -95,6 +98,10 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 						boundary = 0
 						escaped = true
 					case d.mark:
+						// do not append boundary bytes
+						// because they will either
+						// trigger a telomere streak
+						// or carry over until the next read
 						boundary++
 						if boundary >= d.minimum {
 							d.telomereStreak = boundary
@@ -106,14 +113,22 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 						decoded = append(decoded, c)
 					}
 				}
-				d.window = d.window[n+1:]
+				// shorten the window, except
+				// for any carry-over boundary
+				// bytes, because they could
+				// complete a minimum length
+				// requirement on the next read
+				d.window = d.window[n+1-boundary:]
+				// d.window = d.window[n+1:]
 			}
 		}
 
 		// add carry-over boundary bytes, if any
-		for i := 0; i < boundary; i++ {
-			decoded = append(decoded, d.mark)
-		}
+		// for i := 0; i < boundary; i++ {
+		// 	decoded = append(decoded, d.mark)
+		// }
+		// fmt.Println("carry over", string(decoded))
+		// fmt.Println("window", string(d.window))
 
 		if len(decoded) > 0 {
 			// fmt.Println("decoded:", string(decoded), "?", string(d.window))
@@ -128,8 +143,23 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 		}
 
 		if err != nil {
-			if err == io.EOF && total > 0 {
-				return total, nil
+			if err == io.EOF {
+				if len(d.window) > 0 {
+					// some telomere bytes remaining
+					// that were not yet written
+					// because the window was shortened
+					// write them now
+					n, werr := w.Write(d.window)
+					total += int64(n)
+					d.window = d.window[n:]
+					if werr != nil {
+						return total, werr
+					}
+				}
+
+				if total > 0 {
+					return total, nil
+				}
 			}
 			return total, err
 		}
