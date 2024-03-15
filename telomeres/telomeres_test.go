@@ -3,6 +3,7 @@ package telomeres
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 )
 
 func ExampleEncoder_Encode() {
@@ -45,4 +46,22 @@ func ExampleDecoder_Decode() {
 
 	fmt.Println(s1.String(), "||", s2.String())
 	// Output: hello || world
+}
+
+func randomBoundary(n int) []byte {
+	b := make([]byte, 4+rand.Intn(n))
+	for i := 0; i < len(b); i++ {
+		b[i] = ':'
+	}
+	return b
+}
+
+func randomData(n int) []byte {
+	const runes = `::::::::::::\\\\\\\\\\\\\abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`
+	b := make([]byte, rand.Intn(n))
+	limit := len(runes)
+	for i := 0; i < len(b)-1; i++ {
+		b[i] = runes[rand.Intn(limit)]
+	}
+	return b
 }
