@@ -38,7 +38,7 @@ type Tag struct {
 	RedundantShards     uint8                    // Number of additional shards that can be used in place of invalid shards.
 	Padding             uint32                   // Number of bytes to discard after restoration. Typically zero, except for the very last block.
 	BlockSequence       uint32
-	ShardSequence       uint16
+	ShardSequence       uint16 // TODO: reduce to 8
 }
 
 // Differentiate fills the block differentiator with random bytes.

@@ -4,19 +4,6 @@ import (
 	"fmt"
 )
 
-// some collected samples can be nil
-// func SniffGroupingByTag(s *Scanner, samples uint8) ([][]byte, *SnifferSample, error) {
-// 	var err error
-// 	length := int(samples)
-// 	collected := make([][]byte, 0, length)
-// 	for i := 0; i < length; i++ {
-// 		collected[i], err = s.NextShard()
-// 		if err != nil {
-// 			continue
-// 		}
-// 	}
-// }
-
 // SnifferSample tracks the frequency of a shard and others similar to it.
 type SnifferSample struct {
 	Popular   []byte

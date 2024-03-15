@@ -5,55 +5,65 @@ import (
 	"io"
 )
 
-// Encoder appends telomereEscapeByte to each telomereMarkByte. Do not forget to call WriteTelomere at the end or flush manually.
+// Encoder appends an escape byte to each mark byte.
+// Call [Encoder.Cut] manually at the begining of writing,
+// after copying each data chunk, and at the end.
 type Encoder struct {
+	mark   byte
+	escape byte
 	t      []byte
 	b      []byte
 	cursor int
 	w      io.Writer
 }
 
-// NewEncoder sets up the encoder.
-func NewEncoder(w io.Writer, telomereLength, bufferSize int) *Encoder {
-	telomeres := make([]byte, telomereLength)
-	for i := 0; i < telomereLength; i++ {
-		telomeres[i] = telomereMarkByte
+// NewEncoder creates a telomere encoder.
+func (t *Telomeres) NewEncoder(w io.Writer) *Encoder {
+	telomeres := make([]byte, t.minimum)
+	for i := range telomeres {
+		telomeres[i] = t.mark
 	}
 
 	return &Encoder{
-		t: telomeres,
-		b: make([]byte, bufferSize),
-		w: w,
+		mark:   t.mark,
+		escape: t.escape,
+		t:      telomeres,
+		b:      make([]byte, t.bufferSize),
+		w:      w,
 	}
 }
 
 // Flush commits the contents of the buffer to the underlying Writer.
 func (t *Encoder) Flush() (err error) {
-	_, err = io.Copy(t.w, bytes.NewReader(t.b[:t.cursor]))
+	if _, err = io.Copy(t.w, bytes.NewReader(t.b[:t.cursor])); err != nil {
+		return err
+	}
 	t.cursor = 0
-	return err
+	return nil
 }
 
 func (t *Encoder) Write(b []byte) (n int, err error) {
-	// one less for cursor, because may write two bytes per loop iteration
-	max := len(t.b) - 1
-	for ; n < len(b) && t.cursor < max; n++ {
-		current := b[n]
-		if current == telomereMarkByte || current == telomereEscapeByte {
-			t.b[t.cursor] = telomereEscapeByte
-			t.b[t.cursor+1] = current
-			t.cursor += 2
-		} else {
-			t.b[t.cursor] = b[n]
+	available := len(t.b)
+	for _, c := range b {
+		if available-t.cursor < 2 {
+			// always have at least two bytes available
+			// in case need to escape
+			if err = t.Flush(); err != nil {
+				return 0, err
+			}
+		}
+
+		switch c {
+		case t.mark, t.escape:
+			t.b[t.cursor] = t.escape
+			t.cursor++
+			fallthrough
+		default:
+			t.b[t.cursor] = c
 			t.cursor++
 		}
 	}
-	if t.cursor == max {
-		if err = t.Flush(); err != nil {
-			return 0, err
-		}
-	}
-	return n, nil
+	return len(b), nil
 }
 
 // Cut flushes the buffer and writes repeated telomereEscapeBytes to the underlying Writer.
@@ -63,4 +73,9 @@ func (t *Encoder) Cut() (n int, err error) {
 	}
 	j, err := io.Copy(t.w, bytes.NewReader(t.t))
 	return int(j), err
+}
+
+func (t *Encoder) Close() (err error) {
+	_, err = t.Cut()
+	return err
 }

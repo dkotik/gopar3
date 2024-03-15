@@ -2,142 +2,162 @@ package telomeres
 
 import (
 	"errors"
+	"fmt"
 	"io"
 )
 
-// ErrEndReached represents a state of encountering a repeated telomereMarkByte.
-var ErrEndReached = errors.New("reader has no more data")
-
 // Decoder reads the stream, strips telomereEscapeBytes, and detects telomere boundaries.
 type Decoder struct {
-	minimum, maximum, boundary int
-	b, window                  []byte
-	r                          io.Reader
+	mark   byte
+	escape byte
+
+	minimum          int
+	telomereStreak   int
+	b                []byte
+	window           []byte
+	maximumChunkSize int64
+	cursor           int64
+	r                io.Reader
 }
 
 // NewDecoder sets up the decoder. Telomere length determines how many telomereMarkByte are found in a sequence before ErrTelomereBoundaryReached state is triggered.
-func NewDecoder(
+func (t *Telomeres) NewDecoder(
 	r io.Reader,
-	minimumTelomereLength int,
-	maximumTelomereLength int,
-	bufferSize int,
 ) *Decoder {
-	if minimumTelomereLength == 0 {
-		panic("minimum telomere length cannot be 0")
-	}
-	if maximumTelomereLength == 0 {
-		panic("maximum telomere length cannot be 0")
-	}
-	if minimumTelomereLength > maximumTelomereLength {
-		panic("minimum telomere length cannot be greater than the maximum")
-	}
-	if minimumTelomereLength >= bufferSize {
-		panic("telomere length must be less than the allocated buffer size")
-	}
 	return &Decoder{
-		minimum: minimumTelomereLength,
-		maximum: maximumTelomereLength,
-		b:       make([]byte, bufferSize),
-		r:       r,
+		mark:             t.mark,
+		escape:           t.escape,
+		minimum:          t.minimum,
+		maximumChunkSize: 0,
+		b:                make([]byte, t.bufferSize),
+		r:                r,
 	}
 }
 
-func (t *Decoder) fillBuffer() (err error) {
-	n := copy(t.b[:], t.window[:]) // move remainder to the front
+func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
+	var (
+		n          int
+		windowSize int
+		boundary   int
+		escaped    bool
+		decoded    []byte
+	)
 
-	var j int
-	var max = len(t.b)
 	for {
-		j, err = t.r.Read(t.b[n:])
-		n += j
-		if err != nil || n == max {
-			break
-		}
-	}
-	t.window = t.b[:n] // rebuild window
-	return
-}
-
-// Skip keeps reading telomereMarkBytes until something else is found. Returns the number of telomereMarkBytes read and an error.
-func (t *Decoder) Skip() (boundary int, err error) {
-	// var i int
-	for {
-		if len(t.window) < t.minimum {
-			// try to refill the buffer when window gets small
-			if err = t.fillBuffer(); err != nil {
-				if err == io.EOF {
-					return 0, nil // swallow io.EOF
-				}
-				return 0, err
-			}
-		}
-
-		// try to detect a boundary and keep going if you do
-		i := 0
-		for ; i < len(t.window); i++ {
-			if t.window[i] == telomereMarkByte {
-				boundary++
-				if boundary > t.maximum {
-					t.window = t.window[i:]
-					return 0, errors.New("maximum telomere length exceeded")
-				}
+		windowSize = len(d.window)
+		if windowSize < d.minimum {
+			// not enough bytes to detect boundary, get more
+			if windowSize > 0 {
+				// move remaining bytes to the front of the buffer
+				// source and destination may overlap
+				copy(d.b[:windowSize], d.window)
+				// fill the rest of the buffer
+				n, err = d.r.Read(d.b[windowSize:])
+				windowSize += n
 			} else {
-				t.window = t.window[i:]
-				return boundary, nil
+				n, err = d.r.Read(d.b)
+				windowSize = n
+			}
+			d.window = d.b[:windowSize]
+			d.cursor += int64(n)
+		}
+
+		if windowSize > 0 {
+			var c byte
+			if d.telomereStreak > 0 { // drain telomeres
+				for n, c = range d.window {
+					if c != d.mark { // end of telomeres
+						d.telomereStreak = 0
+						d.window = d.window[n:]
+						windowSize = len(d.window)
+						break
+					}
+				}
+				if d.telomereStreak > 0 {
+					d.telomereStreak += n
+					d.window = nil
+					continue // possibly more coming
+				}
+			}
+
+			if windowSize > 0 {
+				decoded = make([]byte, 0, windowSize)
+			decoding:
+				for n, c = range d.window {
+					if escaped {
+						decoded = append(decoded, c)
+						escaped = false
+						continue
+					}
+
+					switch c {
+					case d.escape:
+						boundary = 0
+						escaped = true
+					case d.mark:
+						boundary++
+						if boundary >= d.minimum {
+							d.telomereStreak = boundary
+							boundary = 0
+							break decoding
+						}
+					default:
+						boundary = 0
+						decoded = append(decoded, c)
+					}
+				}
+				d.window = d.window[n+1:]
 			}
 		}
-		t.window = t.window[i:]
+
+		// add carry-over boundary bytes, if any
+		for i := 0; i < boundary; i++ {
+			decoded = append(decoded, d.mark)
+		}
+
+		if len(decoded) > 0 {
+			// fmt.Println("decoded:", string(decoded), "?", string(d.window))
+			n, werr := w.Write(decoded)
+			total += int64(n)
+			if werr != nil {
+				if err == io.EOF {
+					return total, werr
+				}
+				return total, errors.Join(err, werr)
+			}
+		}
+
+		if err != nil {
+			if err == io.EOF && total > 0 {
+				return total, nil
+			}
+			return total, err
+		}
+
+		if total > 0 {
+			if d.telomereStreak > 0 {
+				// finished chunk
+				return total, nil
+			}
+			if d.maximumChunkSize > 0 && total > d.maximumChunkSize {
+				// TODO: add give-up limit for blocks too long here
+				return total, fmt.Errorf("reached the maximum chunk size %d, giving up decoding, use Next(io.Discard) to dump bytes until the next telomere boundary", d.maximumChunkSize)
+			}
+		}
 	}
 }
 
-func (t *Decoder) Read(b []byte) (n int, err error) {
-	boundary, err := t.Skip()
-	if err != nil {
-		return 0, err
-	}
-	boundary += t.boundary // add the number from previous iteration
+// Cursor returns the underlying reader position with the
+// number of detected telomere streak on the end of the buffer.
+// Data chunk boundary can be determined by checking the
+// cursor position before and after calling [Decoder.WriteTo].
+func (d *Decoder) Cursor() (position int64, tailTelomeres int64) {
+	return d.cursor, int64(d.telomereStreak)
+}
 
-	if boundary >= t.minimum {
-		// t.window = t.window[boundary-t.boundary:] // TODO: check this, basically a skip
-		t.boundary = 0
-		return 0, io.EOF
-	}
-	if len(t.window) == 0 {
-		// no more data is coming
-		return 0, ErrEndReached
-	}
-
-	// write the boundary back into b, because it was discovered to not be long enough
-	for ; boundary > 0 && n < len(b); boundary-- {
-		b[n] = telomereMarkByte
-		n++
-	}
-
-	var i int
-	escaped := false
-loop:
-	for ; i < len(t.window) && n < len(b); i++ {
-		if escaped {
-			escaped = false
-		} else {
-			switch t.window[i] {
-			case telomereEscapeByte:
-				boundary = 0
-				escaped = true
-				continue
-			case telomereMarkByte:
-				if boundary++; boundary >= t.minimum {
-					n++ // count this byte
-					break loop
-				}
-			default:
-				boundary = 0
-			}
-		}
-		b[n] = t.window[i]
-		n++
-	}
-	t.window = t.window[i:]
-	t.boundary = boundary // remember the boundary
-	return n - boundary, nil
+func (d *Decoder) Next(w io.Writer) (n int64, err error) {
+	// TODO: implement
+	// TODO: update cursor
+	// TODO: test that it works!
+	return 0, nil
 }

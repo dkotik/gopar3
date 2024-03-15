@@ -1,11 +1,9 @@
 package scanner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/dkotik/gopar3/telomeres"
 )
@@ -44,8 +42,8 @@ func (s *Scanner) Pipe(ctx context.Context, out chan<- ([]byte)) {
 			switch err {
 			case ErrShardTooSmall:
 				continue
-			case telomeres.ErrEndReached:
-				break
+			// case telomeres.ErrEndReached:
+			// 	break
 			case nil:
 				// ignore
 			default:
@@ -65,28 +63,29 @@ func (s *Scanner) Pipe(ctx context.Context, out chan<- ([]byte)) {
 }
 
 func (s *Scanner) NextShard() ([]byte, error) {
-	buffer := &bytes.Buffer{}
-	n, err := io.CopyN(buffer, s.telomeresDecoder, s.maxBytesPerShard)
-	if err == io.EOF {
-		err = nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	s.sequence++
-	if n < 5 { // length of checksum, plus one byte
-		return nil, ErrShardTooSmall
-	}
-
-	b := buffer.Bytes()
-	checksumPosition := buffer.Len() - 4
-	cs := s.checksumFactory()
-	cs.Write(b[:checksumPosition])
-	if bytes.Compare(cs.Sum(nil), b[checksumPosition:]) != 0 {
-		return nil, ErrShardBroken
-	}
-	// if err = s.Validator(b); err != nil {
+	return nil, nil
+	// buffer := &bytes.Buffer{}
+	// n, err := io.CopyN(buffer, s.telomeresDecoder, s.maxBytesPerShard)
+	// if err == io.EOF {
+	// 	err = nil
+	// }
+	// if err != nil {
 	// 	return nil, err
 	// }
-	return b[:checksumPosition], nil
+	// s.sequence++
+	// if n < 5 { // length of checksum, plus one byte
+	// 	return nil, ErrShardTooSmall
+	// }
+	//
+	// b := buffer.Bytes()
+	// checksumPosition := buffer.Len() - 4
+	// cs := s.checksumFactory()
+	// cs.Write(b[:checksumPosition])
+	// if bytes.Compare(cs.Sum(nil), b[checksumPosition:]) != 0 {
+	// 	return nil, ErrShardBroken
+	// }
+	// // if err = s.Validator(b); err != nil {
+	// // 	return nil, err
+	// // }
+	// return b[:checksumPosition], nil
 }

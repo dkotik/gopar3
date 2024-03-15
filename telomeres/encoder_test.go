@@ -7,9 +7,25 @@ import (
 	"testing"
 )
 
-// TODO: // decoder.Skip() does not seem to work by itself
+var encodingTestCases = [...]struct {
+	in  []string
+	out string
+}{
+	{
+		in:  []string{"1", "2", "3", ":"},
+		out: "::::1::::2::::3::::\\:::::",
+	},
+	{
+		in:  []string{"111", "2222", "33333", "44:abc"},
+		out: "::::111::::2222::::33333::::44\\:abc::::",
+	},
+	{
+		in:  []string{"111", "2222", "33333", "44\\abc"},
+		out: "::::111::::2222::::33333::::44\\\\abc::::",
+	},
+}
 
-func TestDecoding(t *testing.T) {
+func TestEncoding(t *testing.T) {
 	telomeres, err := New(WithMinimumCount(4))
 	if err != nil {
 		t.Error(err)

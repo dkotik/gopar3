@@ -26,7 +26,14 @@ type Writer struct {
 
 // NewWriter sets up a nested encoder for commiting shards to IO.
 func (e *Encoder) NewWriter(w io.Writer, proto gopar3.TagPrototype) *Writer {
-	telw := telomeres.NewEncoder(w, e.telomeresLength, e.telomeresBufferSize)
+	t, err := telomeres.New(
+		telomeres.WithMinimumCount(e.telomeresLength),
+		telomeres.WithBufferSize(e.telomeresBufferSize),
+	)
+	if err != nil {
+		panic(err) // TODO: move construct elsewhere?
+	}
+	telw := t.NewEncoder(w)
 	return &Writer{
 		TagPrototype: proto,
 		t:            telw,
