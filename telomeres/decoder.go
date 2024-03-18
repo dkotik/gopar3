@@ -49,6 +49,8 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 	for {
 		windowSize = len(d.window)
 		if windowSize < d.minimum {
+			// TODO: use d.fillBufferWindow here?
+			// total, err = d.fillBufferWindow()
 			// not enough bytes to detect boundary, get more
 			if windowSize > 0 {
 				// move remaining bytes to the front of the buffer
@@ -63,6 +65,8 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 			}
 			d.window = d.b[:windowSize]
 			d.cursor += int64(n)
+			// d.cursor += total
+			// total = 0 // reset, because variable was borrowed
 		}
 
 		if windowSize > 0 {
@@ -177,17 +181,87 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 	}
 }
 
-// Cursor returns the underlying reader position with the
-// number of detected telomere streak on the end of the buffer.
+// Cursor returns the underlying reader position.
 // Data chunk boundary can be determined by checking the
 // cursor position before and after calling [Decoder.WriteTo].
-func (d *Decoder) Cursor() (position int64, tailTelomeres int64) {
-	return d.cursor, int64(d.telomereStreak)
+func (d *Decoder) Cursor() (position int64) {
+	return d.cursor - int64(d.telomereStreak)
 }
 
-func (d *Decoder) Next(w io.Writer) (n int64, err error) {
-	// TODO: implement
-	// TODO: update cursor
-	// TODO: test that it works!
-	return 0, nil
+func (d *Decoder) fillBufferWindow() (n int64, err error) {
+	windowSize := len(d.window)
+	if windowSize > 0 {
+		// move remaining bytes to the front of the buffer
+		// source and destination may overlap
+		copy(d.b[:windowSize], d.window)
+	}
+
+	more := 0
+	max := len(d.b)
+	for {
+		more, err = d.r.Read(d.b[windowSize:])
+		if more == 0 {
+			d.window = d.b[:windowSize]
+			return
+		}
+		windowSize += more
+		n += int64(more)
+		if err != nil || windowSize >= max {
+			d.window = d.b[:windowSize]
+			return
+		}
+	}
+}
+
+func (d *Decoder) FindEdge(softReadLimit int64) (n int64, err error) {
+	var (
+		i int
+		c byte
+	)
+
+	if len(d.window) < d.minimum {
+		n, err = d.fillBufferWindow()
+		softReadLimit -= n
+		n = 0
+	}
+
+	for i, c = range d.window {
+		if c == d.mark {
+			n++
+			continue
+		}
+		if d.telomereStreak+i >= d.minimum {
+			// found edge that ended a streak
+			d.window = nil
+			d.telomereStreak = 0
+			d.cursor += int64(i)
+			return n, err
+		}
+		return n, err // do not move cursor - already at edge
+	}
+
+	more := 0
+	for {
+		if err != nil {
+			break
+		}
+		more, err = d.r.Read(d.b)
+		for i, c = range d.b[:more] {
+			if c != d.mark {
+				d.window = d.b[i:]
+				d.telomereStreak += i
+				d.cursor += int64(i)
+				return n, err
+			}
+			n++
+		}
+		d.cursor += int64(more)
+		softReadLimit -= int64(more)
+		// TODO: add soft limit check
+	}
+
+	d.window = nil // exhausted read
+	d.telomereStreak += int(n)
+	d.cursor += n
+	return n, err
 }

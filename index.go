@@ -11,17 +11,20 @@ import (
 // required to recover one file block.
 type Shard struct {
 	Source        string
-	Begin         int64
-	End           int64
-	Tag           Tag
+	CursorStart   int64
+	CursorEnd     int64
+	CursorGap     int64
 	IsRecoverable bool
 	WasRecovered  bool
+	Tag           Tag
 }
 
 // Index is a map of known shards arranged by [Tag.BlockDifferentiator]
 // gathered from a list of files that could contain recovery data
 // for any number of files. Index can be saved to complete
 // recovery operations in more than one execution.
+//
+// All methods are safe for concurrent use.
 type Index struct {
 	shards map[[DifferentiatorSize]byte][]Shard
 	mu     *sync.Mutex
