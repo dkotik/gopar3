@@ -1,9 +1,15 @@
 package telomeres
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+)
+
+var (
+	ErrBoundary       = errors.New("encountered telomere boundary")
+	ErrUnpairedEscape = errors.New("unpaired escaped byte")
 )
 
 // Decoder reads the stream, strips telomereEscapeBytes, and detects telomere boundaries.
@@ -17,12 +23,12 @@ type Decoder struct {
 	window           []byte
 	maximumChunkSize int64
 	cursor           int64
-	r                io.Reader
+	r                io.ReadSeeker
 }
 
 // NewDecoder sets up the decoder. Telomere length determines how many telomereMarkByte are found in a sequence before ErrTelomereBoundaryReached state is triggered.
 func (t *Telomeres) NewDecoder(
-	r io.Reader,
+	r io.ReadSeeker,
 ) *Decoder {
 	return &Decoder{
 		mark:             t.mark,
@@ -32,6 +38,111 @@ func (t *Telomeres) NewDecoder(
 		b:                make([]byte, t.bufferSize),
 		r:                r,
 	}
+}
+
+// StreamChunk is a calls [Decoder.StreamChunkBuffer] with default buffer.
+func (d *Decoder) StreamChunk(ctx context.Context, to io.Writer) (written int64, err error) {
+	b := make([]byte, 13) // TODO: update
+	return d.StreamChunkBuffer(ctx, to, b)
+}
+
+// StreamChunkBuffer decodes the underlying [io.ReadSeeker] into
+// a writer using a specified buffer. Context is checked for expiration
+// between writes. [ErrBoundary] ends current chunk. Call again
+// to get the next chunk. Returns io.EOF if there are no more chunks.
+func (d *Decoder) StreamChunkBuffer(ctx context.Context, to io.Writer, buffer []byte) (written int64, err error) {
+	var n int
+	var werr error
+	for {
+		n, err = d.Read(buffer)
+		if n > 0 {
+			if n, werr = to.Write(buffer[:n]); werr != nil {
+				return written, errors.Join(err, werr)
+			}
+			written += int64(n)
+		}
+
+		select {
+		case <-ctx.Done():
+			return written, errors.Join(ctx.Err(), err)
+		default:
+		}
+
+		if err != nil {
+			if err == ErrBoundary {
+				if written == 0 {
+					continue
+				}
+				return written, nil
+			}
+			if err == io.EOF && written > 0 {
+				return written, nil
+			}
+			return written, err
+		}
+	}
+}
+
+// Read satisfies [io.Reader] interface. Returns [ErrBoundary]
+// if a telomere mark is detected. Return [ErrUnpairedEscape]
+// if an escaped character is not paired with another.
+func (d *Decoder) Read(b []byte) (n int, err error) {
+	var (
+		c         byte
+		index     int
+		lastIndex int
+	)
+	n, err = d.r.Read(b)
+	window := b[:n]
+	// log.Printf("in: %q", b[:n])
+	// defer func() {
+	// 	log.Printf("out: %q %d", b[:n], n)
+	// }()
+
+decode:
+	for index, c = range window {
+		switch c {
+		case d.mark:
+			n = n - len(window) + index
+			window = window[index+1:]
+			// log.Printf("window: %q buffer: %q", string(window), b[:n])
+			// log.Printf("int: %q %d %d", b[:n], n, n+len(window)+index)
+			goto drain
+		case d.escape:
+			n--
+			lastIndex = len(window) - 1
+			if index == lastIndex {
+				if err == nil {
+					d.cursor, err = d.r.Seek(-1, io.SeekCurrent)
+					return n, err
+				}
+				err = ErrUnpairedEscape
+				break decode
+			}
+			copy(window[index:lastIndex], window[index+1:]) // cut current byte
+			window = window[index+1 : lastIndex]
+			// log.Println("escaped window:", string(window), string(b[:n]))
+			goto decode
+		}
+	}
+	d.cursor += int64(n)
+	return n, err
+
+drain: // discard any remaining mark bytes
+	for index, c = range window {
+		if c != d.mark {
+			// log.Printf("seeking back: %d %q %q", -int64(len(window)-index), string(window), c)
+			// log.Printf("buffer: %q", string(b[n:]))
+			d.cursor, err = d.r.Seek(-int64(len(window)-index), io.SeekCurrent)
+			// panic("boo")
+			if err != nil {
+				return n, err
+			}
+			return n, ErrBoundary
+		}
+	}
+	d.cursor += int64(n)
+	return n, ErrBoundary
 }
 
 // WriteTo streams the next data chunk into a writer according
@@ -74,6 +185,7 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 			if d.telomereStreak > 0 { // drain telomeres
 				for n, c = range d.window {
 					if c != d.mark { // end of telomeres
+						// d.cursor += int64(d.telomereStreak)
 						d.telomereStreak = 0
 						d.window = d.window[n:]
 						windowSize = len(d.window)
@@ -138,6 +250,7 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 			// fmt.Println("decoded:", string(decoded), "?", string(d.window))
 			n, werr := w.Write(decoded)
 			total += int64(n)
+			d.cursor += int64(n)
 			if werr != nil {
 				if err == io.EOF {
 					return total, werr
@@ -155,6 +268,7 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 					// write them now
 					n, werr := w.Write(d.window)
 					total += int64(n)
+					d.cursor += int64(n)
 					d.window = d.window[n:]
 					if werr != nil {
 						return total, werr
@@ -181,13 +295,6 @@ func (d *Decoder) WriteTo(w io.Writer) (total int64, err error) {
 	}
 }
 
-// Cursor returns the underlying reader position.
-// Data chunk boundary can be determined by checking the
-// cursor position before and after calling [Decoder.WriteTo].
-func (d *Decoder) Cursor() (position int64) {
-	return d.cursor - int64(d.telomereStreak)
-}
-
 func (d *Decoder) fillBufferWindow() (n int64, err error) {
 	windowSize := len(d.window)
 	if windowSize > 0 {
@@ -211,57 +318,4 @@ func (d *Decoder) fillBufferWindow() (n int64, err error) {
 			return
 		}
 	}
-}
-
-func (d *Decoder) FindEdge(softReadLimit int64) (n int64, err error) {
-	var (
-		i int
-		c byte
-	)
-
-	if len(d.window) < d.minimum {
-		n, err = d.fillBufferWindow()
-		softReadLimit -= n
-		n = 0
-	}
-
-	for i, c = range d.window {
-		if c == d.mark {
-			n++
-			continue
-		}
-		if d.telomereStreak+i >= d.minimum {
-			// found edge that ended a streak
-			d.window = nil
-			d.telomereStreak = 0
-			d.cursor += int64(i)
-			return n, err
-		}
-		return n, err // do not move cursor - already at edge
-	}
-
-	more := 0
-	for {
-		if err != nil {
-			break
-		}
-		more, err = d.r.Read(d.b)
-		for i, c = range d.b[:more] {
-			if c != d.mark {
-				d.window = d.b[i:]
-				d.telomereStreak += i
-				d.cursor += int64(i)
-				return n, err
-			}
-			n++
-		}
-		d.cursor += int64(more)
-		softReadLimit -= int64(more)
-		// TODO: add soft limit check
-	}
-
-	d.window = nil // exhausted read
-	d.telomereStreak += int(n)
-	d.cursor += n
-	return n, err
 }
