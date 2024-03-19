@@ -9,8 +9,6 @@ import (
 )
 
 func FuzzSingleChunk(f *testing.F) {
-	// f.Skip("impl")
-
 	for _, tc := range [...]string{
 		"Hello, world",
 		" ",

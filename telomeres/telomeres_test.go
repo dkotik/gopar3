@@ -2,10 +2,12 @@ package telomeres
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
+	"time"
 )
 
 func ExampleEncoder_Encode() {
@@ -32,16 +34,19 @@ func ExampleDecoder_Decode() {
 	if err != nil {
 		panic(err)
 	}
+
 	d := t.NewDecoder(b)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
 
 	s1 := &bytes.Buffer{}
-	_, err = d.WriteTo(s1)
+	_, err = d.StreamChunk(ctx, s1)
 	if err != nil {
 		panic(err)
 	}
 
 	s2 := &bytes.Buffer{}
-	_, err = d.WriteTo(s2)
+	_, err = d.StreamChunk(ctx, s2)
 	if err != nil {
 		panic(err)
 	}

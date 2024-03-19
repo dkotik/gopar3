@@ -2,27 +2,28 @@ package telomeres
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
-	"strings"
 	"testing"
+	"time"
 )
-
-// TODO: // decoder.Skip() does not seem to work by itself
 
 func TestDecoding(t *testing.T) {
 	telomeres, err := New(WithMinimumCount(4))
 	if err != nil {
 		t.Error(err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
 
 	b := &bytes.Buffer{}
 	var n int64
 	for _, tc := range encodingTestCases {
-		d := telomeres.NewDecoder(strings.NewReader(tc.out))
+		d := telomeres.NewDecoder(newTestBuffer([]byte(tc.out)))
 
 		for _, chunk := range tc.in {
-			n, err = d.WriteTo(b)
+			n, err = d.StreamChunk(ctx, b)
 			if err != nil {
 				t.Error(err)
 			}
@@ -37,7 +38,7 @@ func TestDecoding(t *testing.T) {
 			b.Reset()
 		}
 
-		n, err = d.WriteTo(b)
+		n, err = d.StreamChunk(ctx, b)
 		if !errors.Is(err, io.EOF) {
 			t.Errorf("expecing io.EOF got this instead: %+v", err)
 		}
@@ -52,10 +53,12 @@ func TestEmptyDecoding(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
 
-	decoder := telomeres.NewDecoder(bytes.NewReader(nil))
+	decoder := telomeres.NewDecoder(&testBuffer{})
 	b := &bytes.Buffer{}
-	n, err := decoder.WriteTo(b)
+	n, err := decoder.StreamChunk(ctx, b)
 	if !errors.Is(err, io.EOF) {
 		t.Error("expected io.EOF but instead got:", err)
 	}

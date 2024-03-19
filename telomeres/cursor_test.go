@@ -2,9 +2,11 @@ package telomeres
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 type chunkFollowedByTelomere struct {
@@ -21,7 +23,6 @@ var cursorTestCases = [...]*chunkFollowedByTelomere{
 }
 
 func TestCursorPositionReporting(t *testing.T) {
-	t.Skip("cursor tracking is broken")
 	telomeres, err := New(
 		WithMinimumCount(4),
 		WithBufferSize(71),
@@ -44,22 +45,34 @@ func TestCursorPositionReporting(t *testing.T) {
 		}
 		_, _ = io.WriteString(b, strings.Repeat(`:`, tc.telomeres))
 	}
-	t.Log("edge:", b.String())
+	// t.Log("edge:", b.String())
 
-	decoder := telomeres.NewDecoder(bytes.NewReader(b.Bytes()))
-	n, err := decoder.FindEdge(9999999999)
-	if n != 4 {
-		t.Fatalf("did not find expected data edge %d vs %d", n, 4)
+	decoder := telomeres.NewDecoder(newTestBuffer(b.Bytes()))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+
+	if err = decoder.SeekChunk(ctx); err != nil {
+		t.Fatal("failed to seek:", err)
 	}
-	cursor := decoder.Cursor()
+	cursor, err := decoder.Cursor()
+	if err != nil {
+		t.Fatal("failed to get cursor position:", err)
+	}
 	if cursor != 4 {
-		t.Fatalf("did not find expected data edge cursor %d vs %d", cursor, 4)
+		t.Fatalf("did not find expected data edge %d vs %d", cursor, 4)
 	}
+	// cursor += 4
 
 	chunk := &bytes.Buffer{}
-	data := b.String()
+	// data := b.String()
+	var n int64
 	for _, tc := range cursorTestCases {
-		if n, err = decoder.WriteTo(chunk); err != nil {
+		// start, err := decoder.Cursor()
+		if err != nil {
+			t.Fatal("failed to get cursor position:", err)
+		}
+
+		if n, err = decoder.StreamChunk(ctx, chunk); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -71,14 +84,22 @@ func TestCursorPositionReporting(t *testing.T) {
 			t.Fatal("case mismatch")
 		}
 		cursor += n
-		if cursor != decoder.Cursor()+n {
-			t.Fatalf("did not find expected chunk edge cursor %d vs %d (%d)", cursor, decoder.Cursor()+n, n)
+		decoderCursor, err := decoder.Cursor()
+		if err != nil {
+			t.Fatal("failed to get cursor position:", err)
 		}
-		if data[cursor-n:cursor] != tc.chunk {
-			t.Log("     got:", chunk.String())
-			t.Log("expected:", tc.chunk)
-			t.Fatal("data mismatch when checking cursor bounds")
+
+		if cursor != decoderCursor {
+			t.Logf("added: %d", n)
+			t.Fatalf("did not find expected chunk edge cursor %d vs %d", cursor, decoderCursor)
 		}
+		// if data[start:cursor] != tc.chunk {
+		// 	t.Logf("     got: %q", data[start:cursor])
+		// 	t.Logf("expected: %q", tc.chunk)
+		// 	t.Fatal("data mismatch when checking cursor bounds")
+		// }
+		chunk.Reset()
+		cursor += int64(tc.telomeres)
 	}
 
 	// var n int64

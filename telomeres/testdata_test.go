@@ -2,18 +2,19 @@ package telomeres
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestStoredCases(t *testing.T) {
-	f, err := os.Open("testdata/primary.txt")
+	data, err := os.ReadFile("testdata/primary.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
 
 	telomeres, err := New(
 		WithMinimumCount(4),
@@ -22,16 +23,20 @@ func TestStoredCases(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	decoder := telomeres.NewDecoder(f)
+	decoder := telomeres.NewDecoder(newTestBuffer(data))
 
 	b := &bytes.Buffer{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+
 	for {
-		_, err = decoder.WriteTo(b)
+		_, err = decoder.StreamChunk(ctx, b)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			t.Error(err)
 		}
+		b.Reset()
 	}
 }
