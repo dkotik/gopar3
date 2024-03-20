@@ -27,7 +27,8 @@ type Shard struct {
 // All methods are safe for concurrent use.
 type Index struct {
 	shards map[[DifferentiatorSize]byte][]Shard
-	mu     *sync.Mutex
+	// TODO: add recovery options that average tag values
+	mu *sync.Mutex
 }
 
 func (i *Index) AddShard(s Shard) error {

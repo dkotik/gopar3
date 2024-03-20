@@ -12,11 +12,7 @@ import (
 
 func ExampleEncoder_Encode() {
 	b := &bytes.Buffer{}
-	t, err := New(WithMinimumCount(4))
-	if err != nil {
-		panic(err)
-	}
-	e := t.NewEncoder(b)
+	e, _ := NewEncoder(b, 4)
 
 	_, _ = e.Cut()
 	_, _ = e.Write([]byte("hello"))
@@ -29,18 +25,14 @@ func ExampleEncoder_Encode() {
 }
 
 func ExampleDecoder_Decode() {
-	b := newTestBuffer([]byte("::::hello::::world::::"))
-	t, err := New(WithMinimumCount(4))
-	if err != nil {
-		panic(err)
-	}
-
-	d := t.NewDecoder(b)
+	d := NewDecoder(
+		newTestBuffer([]byte("::::hello::::world::::")),
+	)
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
 	defer cancel()
 
 	s1 := &bytes.Buffer{}
-	_, err = d.StreamChunk(ctx, s1)
+	_, err := d.StreamChunk(ctx, s1)
 	if err != nil {
 		panic(err)
 	}

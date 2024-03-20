@@ -11,35 +11,27 @@ var (
 	ErrUnpairedEscape = errors.New("unpaired escaped byte")
 )
 
-// Decoder reads the stream, strips telomereEscapeBytes, and detects telomere boundaries.
+// Decoder reads until a [Mark] byte and strips [Escape] bytes.
 type Decoder struct {
 	r            io.ReadSeeker
 	telomereTail int64
-	mark         byte
-	escape       byte
 }
 
-// NewDecoder sets up the decoder. Telomere length determines how many telomereMarkByte are found in a sequence before ErrTelomereBoundaryReached state is triggered.
-func (t *Telomeres) NewDecoder(
-	r io.ReadSeeker,
-) *Decoder {
-	return &Decoder{
-		r:      r,
-		mark:   t.mark,
-		escape: t.escape,
-	}
+// NewDecoder sets up the decoder.
+func NewDecoder(r io.ReadSeeker) *Decoder {
+	return &Decoder{r: r}
 }
 
 // StreamChunk is a calls [Decoder.StreamChunkBuffer] with default buffer.
 func (d *Decoder) StreamChunk(ctx context.Context, to io.Writer) (written int64, err error) {
-	b := make([]byte, 13) // TODO: update with makeDefaultBuffer
-	return d.StreamChunkBuffer(ctx, to, b)
+	return d.StreamChunkBuffer(ctx, to, d.makeDefaultBuffer())
 }
 
 // StreamChunkBuffer decodes the underlying [io.ReadSeeker] into
 // a writer using a specified buffer. Context is checked for expiration
 // between writes. [ErrBoundary] ends current chunk. Call again
 // to get the next chunk. Returns io.EOF if there are no more chunks.
+// Buffer must have capacity for **at least two bytes**.
 func (d *Decoder) StreamChunkBuffer(ctx context.Context, to io.Writer, buffer []byte) (written int64, err error) {
 	var n int
 	var werr error
@@ -74,7 +66,7 @@ func (d *Decoder) StreamChunkBuffer(ctx context.Context, to io.Writer, buffer []
 }
 
 // Read satisfies [io.Reader] interface. Returns [ErrBoundary]
-// if a telomere mark is detected. Return [ErrUnpairedEscape]
+// if a [Mark] byte is detected. Return [ErrUnpairedEscape]
 // if an escaped character is not paired with another.
 func (d *Decoder) Read(b []byte) (n int, err error) {
 	var (
@@ -87,7 +79,7 @@ func (d *Decoder) Read(b []byte) (n int, err error) {
 		return n, err
 	}
 	window := b[:n]
-	if b[0] != d.mark {
+	if d.telomereTail > 0 && window[0] != Mark {
 		d.telomereTail = 0
 	}
 	// log.Printf("in: %q", b[:n])
@@ -98,13 +90,13 @@ func (d *Decoder) Read(b []byte) (n int, err error) {
 decode:
 	for index, c = range window {
 		switch c {
-		case d.mark:
+		case Mark:
 			n = n - len(window) + index
 			window = window[index+1:]
 			// log.Printf("window: %q buffer: %q", string(window), b[:n])
 			// log.Printf("int: %q %d %d", b[:n], n, n+len(window)+index)
 			goto drain
-		case d.escape:
+		case Escape:
 			n--
 			lastIndex = len(window) - 1
 			if index == lastIndex {
@@ -123,15 +115,14 @@ decode:
 	}
 	return n, err
 
-drain: // discard any remaining mark bytes
+drain: // discard any remaining [Mark] bytes
 	d.telomereTail++ // for the previous byte that got us to drain
 	for index, c = range window {
-		if c != d.mark {
+		if c != Mark {
 			d.telomereTail += int64(index)
 			// log.Printf("seeking back: %d %q %q", -int64(len(window)-index), string(window), c)
 			// log.Printf("buffer: %q", string(b[n:]))
 			_, err = d.r.Seek(-int64(len(window)-index), io.SeekCurrent)
-			// panic("boo")
 			if err != nil {
 				return n, err
 			}

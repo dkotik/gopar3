@@ -4,43 +4,27 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestUniformRandomEncodingDecoding(t *testing.T) {
-	t.Skip("rewrite")
 	testCases := [...]int{
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
 		60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
 		125, 126, 127, 128, 129, 130, 131, 136,
 	}
-
-	telomeres, err := New(
-		WithMinimumCount(5),
-		WithBufferSize(67),
-	)
-	if err != nil {
-		t.Error(err)
-	}
-	filePath := filepath.Join(t.TempDir(), "uniformTest.txt")
-	// filePath := filepath.Join(os.TempDir(), "uniformTest.txt")
-	b, err := os.Create(filePath)
+	b := &bytes.Buffer{}
+	encoder, err := NewEncoder(b, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		// t.Log("temp file:", filePath)
-		if err = b.Close(); err != nil {
-			t.Fatal(err)
-		}
-	})
-	encoder := telomeres.NewEncoder(b)
 
+	var dataByte byte = '!'
+	// var dataByte byte = Mark
+	// var dataByte byte = Escape
 	for _, tc := range testCases {
-		chunk := randomData(tc)
+		chunk := bytes.Repeat([]byte{dataByte}, tc)
 		n, err := encoder.Cut()
 		if err != nil {
 			t.Error(err)
@@ -62,14 +46,13 @@ func TestUniformRandomEncodingDecoding(t *testing.T) {
 		if n != 5 {
 			t.Errorf("wrote %d cut bytes, but expecting %d", n, 5)
 		}
-		if _, err = b.Seek(0, io.SeekStart); err != nil {
-			t.Fatal(err)
-		}
+	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		d := &bytes.Buffer{}
-		decoder := telomeres.NewDecoder(b)
+	decoder := NewDecoder(newTestBuffer(b.Bytes()))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	d := &bytes.Buffer{}
+	for _, tc := range testCases {
 		nn, err := decoder.StreamChunk(ctx, d)
 		if err != nil && err != io.EOF {
 			// if !(errors.Is(err, io.EOF) && len(chunk) == 0) {
@@ -80,10 +63,15 @@ func TestUniformRandomEncodingDecoding(t *testing.T) {
 			// }
 			t.Fatal(err)
 		}
-		if nn != int64(len(chunk)) || !bytes.Equal(d.Bytes(), chunk) {
-			t.Logf("expected: %q", string(chunk))
+		if nn != int64(tc) {
 			t.Logf(" decoded: %q", d.String())
-			t.Fatalf("wrote %d decoded chunk bytes, but expecting %d", nn, len(chunk))
+			t.Fatalf("wrote %d decoded chunk bytes, but expecting %d", nn, tc)
+		}
+		for _, c := range d.Bytes() {
+			if c != dataByte {
+				t.Logf(" decoded: %q", d.String())
+				t.Fatalf("expected all %q bytes, but got one %q", dataByte, c)
+			}
 		}
 	}
 }

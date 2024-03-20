@@ -32,7 +32,7 @@ func (d *Decoder) SeekChunkBuffer(
 	for {
 		n, err = d.r.Read(buffer)
 		for i, c = range buffer[:n] {
-			if c != d.mark {
+			if c != Mark {
 				_, err = d.r.Seek(-int64(n-i), io.SeekCurrent)
 				return err
 			}

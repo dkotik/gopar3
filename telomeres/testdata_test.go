@@ -15,15 +15,7 @@ func TestStoredCases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	telomeres, err := New(
-		WithMinimumCount(4),
-		WithBufferSize(65),
-	)
-	if err != nil {
-		t.Error(err)
-	}
-	decoder := telomeres.NewDecoder(newTestBuffer(data))
+	decoder := NewDecoder(newTestBuffer(data))
 
 	b := &bytes.Buffer{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)

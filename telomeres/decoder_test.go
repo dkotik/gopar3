@@ -10,17 +10,14 @@ import (
 )
 
 func TestDecoding(t *testing.T) {
-	telomeres, err := New(WithMinimumCount(4))
-	if err != nil {
-		t.Error(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
 	b := &bytes.Buffer{}
 	var n int64
+	var err error
 	for _, tc := range encodingTestCases {
-		d := telomeres.NewDecoder(newTestBuffer([]byte(tc.out)))
+		d := NewDecoder(newTestBuffer([]byte(tc.out)))
 
 		for _, chunk := range tc.in {
 			n, err = d.StreamChunk(ctx, b)
@@ -49,14 +46,10 @@ func TestDecoding(t *testing.T) {
 }
 
 func TestEmptyDecoding(t *testing.T) {
-	telomeres, err := New()
-	if err != nil {
-		t.Error(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
-	decoder := telomeres.NewDecoder(&testBuffer{})
+	decoder := NewDecoder(&testBuffer{})
 	b := &bytes.Buffer{}
 	n, err := decoder.StreamChunk(ctx, b)
 	if !errors.Is(err, io.EOF) {

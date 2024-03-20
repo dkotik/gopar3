@@ -23,16 +23,11 @@ var cursorTestCases = [...]*chunkFollowedByTelomere{
 }
 
 func TestCursorPositionReporting(t *testing.T) {
-	telomeres, err := New(
-		WithMinimumCount(4),
-		WithBufferSize(71),
-	)
-	if err != nil {
-		t.Error(err)
-	}
-
 	b := &bytes.Buffer{}
-	encoder := telomeres.NewEncoder(b)
+	encoder, err := NewEncoder(b, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, _ = io.WriteString(b, `::::`)
 	for _, tc := range cursorTestCases {
 		_, err = io.WriteString(encoder, tc.chunk)
@@ -40,14 +35,11 @@ func TestCursorPositionReporting(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = encoder.Flush(); err != nil {
-			t.Fatal(err)
-		}
 		_, _ = io.WriteString(b, strings.Repeat(`:`, tc.telomeres))
 	}
 	// t.Log("edge:", b.String())
 
-	decoder := telomeres.NewDecoder(newTestBuffer(b.Bytes()))
+	decoder := NewDecoder(newTestBuffer(b.Bytes()))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 

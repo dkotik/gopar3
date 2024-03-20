@@ -24,16 +24,11 @@ func FuzzSingleChunk(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, chunk string) {
 		const tl = 4
-
-		telomeres, err := New(
-			WithMinimumCount(tl),
-			WithBufferSize(79),
-		)
+		b := &testBuffer{}
+		encoder, err := NewEncoder(b, tl)
 		if err != nil {
 			t.Fatal(err)
 		}
-		b := &testBuffer{}
-		encoder := telomeres.NewEncoder(b)
 		n, err := encoder.Cut()
 		if err != nil {
 			t.Fatal(err)
@@ -65,13 +60,14 @@ func FuzzSingleChunk(f *testing.F) {
 		}
 
 		d := &bytes.Buffer{}
-		decoder := telomeres.NewDecoder(b)
+		decoder := NewDecoder(b)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		nn, err := decoder.StreamChunk(ctx, d)
-		// if err != nil {
-		// 	t.Fatal(err)
-		// }
+		// nn, err := decoder.StreamChunkBuffer(ctx, d, make([]byte, 99))
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
 		if nn != int64(len(chunk)) || d.String() != chunk {
 			t.Log("   error:", err)
 			t.Log("expected:", chunk)
