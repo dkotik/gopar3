@@ -8,10 +8,6 @@ import (
 )
 
 func (d *Decoder) WriteAll(w io.Writer, in <-chan ([][]byte)) error {
-	// f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, 600)
-	// if err != nil {
-	// 	return err
-	// }
 	errc := make(chan (error))
 
 	go func() {

@@ -36,17 +36,16 @@ func (d *Decoder) Decode(ctx context.Context, w io.Writer, streams []io.Reader) 
 	defer close(in)
 
 	// TODO: launch consumers of in channel here, so they are ready for shards of the sniffer
-	batches := d.orderAndGroup(in)
-	complete := d.CompleteWithReedSolomon(batches)
+	// batches := d.orderAndGroup(in)
+	// complete := d.CompleteWithReedSolomon(batches)
 
-	if err = d.SniffAndSetupFilter(in, streams); err != nil {
-		return err
-	}
-	for _, r := range streams {
-		d.StartReading(r, in)
-	}
-
-	return d.WriteAll(w, complete) // TODO: add context?
+	// if err = d.SniffAndSetupFilter(in, streams); err != nil {
+	// 	return err
+	// }
+	// for _, r := range streams {
+	// 	d.StartReading(r, in)
+	// }
+	return nil
 }
 
 func (d *Decoder) String() string {

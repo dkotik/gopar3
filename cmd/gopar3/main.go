@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dkotik/gopar3"
 	flag "github.com/spf13/pflag"
 )
 
@@ -15,6 +14,8 @@ var (
 	telomeres   = flag.UintP("telomeres", "t", 8, "length of telomere padding protecting\nshard boundaries more padding increases\noutput resilience")
 	memoryLimit = flag.IntP("memoryMB", "m", 128, "memory usage limit for operations\nin Megabytes")
 	help        = flag.BoolP("help", "h", false, "print help message")
+
+	version = "Alpha"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err.Error())
 			return
 		}
-		fmt.Fprintf(os.Stderr, "gopar3 v%s data resilience utility\n\n  gopar3 [encode|decode|inspect] [FILE] [FLAGS]\n\n", gopar3.Version)
+		fmt.Fprintf(os.Stderr, "gopar3 v%s data resilience utility\n\n  gopar3 [encode|decode|inspect] [FILE] [FLAGS]\n\n", version)
 		flag.PrintDefaults()
 	}
 
@@ -46,7 +47,7 @@ func main() {
 		case "inspect":
 			return
 		case "version":
-			fmt.Fprintf(os.Stderr, "gopar3 v%s\n", gopar3.Version)
+			fmt.Fprintf(os.Stderr, "gopar3 %s\n", version)
 			return
 		}
 	}

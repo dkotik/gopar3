@@ -1,18 +1,37 @@
 package gopar3
 
-import "testing"
+import (
+	"bytes"
+	"math"
+	"reflect"
+	"testing"
+)
 
-func TestTag(t *testing.T) {
-	if TagSize != 24 {
-		t.Fatal("tag size got bent out of standard", TagSize)
+func TestTagLimits(t *testing.T) {
+	if TagSize != 16 {
+		t.Fatal("tag size bent out of standard", TagSize)
 	}
-	if 2<<40/MaxBlocks < 512 { // 512b will be the minimum block size for a TB of data
-		t.Fatal("tag size does not support a TB of input data", 2<<40/MaxBlocks)
+	if DifferentiatorSize != 13 {
+		t.Fatal("differentiator size bent out of standard", DifferentiatorSize)
 	}
-}
+	if ShardLimit != math.MaxUint8 {
+		t.Fatal("unexpected shard limit", ShardLimit, math.MaxUint8)
+	}
+	if ShardGroupLimit != math.MaxUint16 {
+		t.Fatal("unexpected shard limit", ShardGroupLimit, math.MaxUint16)
+	}
+	if SourceSizeLimit != math.MaxUint64 {
+		t.Fatal("unexpected shard limit")
+	}
 
-func TestPadding(t *testing.T) {
-	if MaxPadding != 4294967295 {
-		t.Fatal("max padding is out of standard", MaxPadding)
+	a := []byte("1234567890123456")
+	b := NewTag(a).Bytes()
+	if !bytes.Equal(a, b) {
+		t.Logf("a: %q", a)
+		t.Logf("b: %q", b)
+		t.Fatal("values do not match")
+	}
+	if !reflect.DeepEqual(NewTag(a), NewTag(b)) {
+		t.Fatal("decoded tags do not match")
 	}
 }

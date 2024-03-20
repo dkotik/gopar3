@@ -2,77 +2,116 @@ package gopar3
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"io"
-	"math/rand"
-	"time"
+	"math"
 )
 
-// Tag pieces mark byte boundaries of each element:
 const (
-	// VersionBytePosition is first at 0.
-	TagBlockDifferentiatorPosition = 0 + 1
-	TagRequiredShardsPosition      = TagBlockDifferentiatorPosition + 7
-	TagRedundantShardsPosition     = TagRequiredShardsPosition + 1
-	TagPaddingPosition             = TagRedundantShardsPosition + 1
-	TagBatchSequencePosition       = TagPaddingPosition + 4
-	TagShardSequencePosition       = TagBatchSequencePosition + 4
-	TagChecksumPosition            = TagShardSequencePosition + 2
+	TagBytesForCRC         = 4
+	TagBytesForSourceSize  = 8
+	TagBytesForShardQuorum = 1
+	TagBytesForShardOrder  = 1
+	TagBytesForShardGroup  = 2
 
-	// Derivatives
-	TagSize            = TagChecksumPosition + 4 // should be 24b
-	DifferentiatorSize = TagRequiredShardsPosition - TagBlockDifferentiatorPosition
-	// MaxPadding determines how large of a pad the tag supports.
-	MaxPadding = (1 << (8 * (TagBatchSequencePosition - TagPaddingPosition))) - 1
-	// MaxBlocks shows how many blocks can be encoded at most.
-	MaxBlocks = (1 << (8 * (TagShardSequencePosition - TagBatchSequencePosition)))
-	// MaxShardsPerBatch is constrained by klauspost/reedsolomon limit.
-	MaxShardsPerBatch = 256
+	// Derivatives:
+
+	TagBeginSourceCRC   = 0
+	TagEndSourceCRC     = TagBeginSourceCRC + TagBytesForCRC
+	TagBeginSourceSize  = TagEndSourceCRC
+	TagEndSourceSize    = TagBeginSourceSize + TagBytesForSourceSize
+	TagBeginShardQuorum = TagEndSourceSize
+	TagEndShardQuorum   = TagBeginShardQuorum + TagBytesForShardQuorum
+	TagBeginShardOrder  = TagEndShardQuorum
+	TagEndShardOrder    = TagBeginShardOrder + TagBytesForShardOrder
+	TagBeginShardGroup  = TagEndShardOrder
+	TagEndShardGroup    = TagBeginShardGroup + TagBytesForShardGroup
+	TagSize             = TagEndShardGroup - TagBeginSourceCRC
+	DifferentiatorSize  = TagEndShardQuorum - TagBeginSourceCRC
 )
 
-// Tag holds the all the neccessary hints to perform full data reconstruction.
+// Tag holds the parameters to perform validated data reconstruction.
 type Tag struct {
-	Version             uint8                    // Encoder version used to create the tag.
-	BlockDifferentiator [DifferentiatorSize]byte // Random block group UUID for identifying blocks that belong together.
-	RequiredShards      uint8                    // Number of valid shards required for restoration.
-	RedundantShards     uint8                    // Number of additional shards that can be used in place of invalid shards.
-	Padding             uint32                   // Number of bytes to discard after restoration. Typically zero, except for the very last block.
-	BlockSequence       uint32
-	ShardSequence       uint16 // TODO: reduce to 8
+	SourceCRC   uint32
+	SourceSize  uint64
+	ShardQuorum uint8
+	ShardOrder  uint8
+	ShardGroup  uint16
 }
 
-// Differentiate fills the block differentiator with random bytes.
-func (t *Tag) Differentiate() (err error) {
-	rand.Seed(time.Now().UnixNano())
-	_, err = rand.Read(t.BlockDifferentiator[:])
-	return
-}
-
-func (t *Tag) Write(b []byte) (n int, err error) {
-	if len(b) < TagSize {
-		return 0, io.ErrShortBuffer
+func NewTag(b []byte) Tag {
+	return Tag{
+		SourceCRC: binary.BigEndian.Uint32(
+			b[TagBeginSourceCRC:TagEndSourceCRC],
+		),
+		SourceSize: binary.BigEndian.Uint64(
+			b[TagBeginSourceSize:TagEndSourceSize],
+		),
+		ShardQuorum: b[TagBeginShardQuorum],
+		ShardOrder:  b[TagBeginShardOrder],
+		ShardGroup: binary.BigEndian.Uint16(
+			b[TagBeginShardGroup:TagEndShardGroup],
+		),
 	}
-	b[0] = byte(t.Version)
-	copy(b[TagBlockDifferentiatorPosition:TagRequiredShardsPosition], t.BlockDifferentiator[:])
-	b[TagRequiredShardsPosition] = byte(t.RequiredShards)
-	b[TagRedundantShardsPosition] = byte(t.RedundantShards)
-	// b[TagPaddingPosition] = byte(t.Padding)
-	binary.BigEndian.PutUint32(b[TagPaddingPosition:TagBatchSequencePosition], t.Padding)
-	binary.BigEndian.PutUint32(b[TagBatchSequencePosition:TagShardSequencePosition], t.BlockSequence)
-	binary.BigEndian.PutUint16(b[TagShardSequencePosition:TagChecksumPosition], t.ShardSequence)
-	return 0, nil
 }
 
-// Prototype creates a clonable prototype.
-func (t *Tag) Prototype() TagPrototype {
-	var result TagPrototype
-	t.Write(result[:])
-	return result
+func (t Tag) Bytes() (b []byte) {
+	b = make([]byte, TagSize)
+	binary.BigEndian.PutUint32(
+		b[TagBeginSourceCRC:TagEndSourceCRC],
+		t.SourceCRC,
+	)
+	binary.BigEndian.PutUint64(
+		b[TagBeginSourceSize:TagEndSourceSize],
+		t.SourceSize,
+	)
+	b[TagBeginShardQuorum] = t.ShardQuorum
+	b[TagBeginShardOrder] = t.ShardOrder
+	binary.BigEndian.PutUint16(
+		b[TagBeginShardGroup:TagEndShardGroup],
+		t.ShardGroup,
+	)
+	return b
 }
 
-func IsPossible(shards uint8, shardSize uint64) error {
-	if more := uint64(shards)*shardSize - MaxPadding; more > 0 {
-		return fmt.Errorf("exceeding possible by %d", more)
+type tagWriter struct {
+	w          io.Writer
+	encoded    []byte
+	tag        Tag
+	shardLimit uint8
+}
+
+func (tw *tagWriter) ReadFrom(r io.Reader) (n int64, err error) {
+	if tw.tag.ShardGroup == math.MaxUint16 && tw.tag.ShardOrder == math.MaxUint8 {
+		return 0, errors.New("too many shards")
 	}
-	return nil
+	n, err = io.Copy(tw.w, r)
+	if err != nil {
+		return n, err
+	}
+	tn, err := tw.w.Write(tw.encoded)
+	n += int64(tn)
+	if tw.tag.ShardOrder < tw.shardLimit {
+		tw.tag.ShardOrder++
+		tw.encoded[TagBeginShardOrder] = tw.tag.ShardOrder
+	} else {
+		tw.tag.ShardOrder = 0
+		tw.tag.ShardGroup++
+		tw.encoded[TagBeginShardOrder] = 0
+		binary.BigEndian.PutUint16(
+			tw.encoded[TagBeginShardGroup:TagEndShardGroup],
+			tw.tag.ShardGroup,
+		)
+	}
+	// TODO: write checksum?
+	return n, err
+}
+
+func NewTagWriter(to io.Writer, tag Tag, parityShards uint8) io.ReaderFrom {
+	return &tagWriter{
+		w:          to,
+		encoded:    nil,
+		tag:        tag,
+		shardLimit: tag.ShardQuorum + parityShards,
+	}
 }

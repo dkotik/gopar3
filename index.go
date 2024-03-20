@@ -31,14 +31,14 @@ type Index struct {
 	mu *sync.Mutex
 }
 
-func (i *Index) AddShard(s Shard) error {
-	block := s.Tag.BlockDifferentiator
-	i.mu.Lock()
-	shards, _ := i.shards[block]
-	i.shards[block] = append(shards, s)
-	i.mu.Unlock()
-	return nil
-}
+// func (i *Index) AddShard(s Shard) error {
+// 	block := s.Tag.BlockDifferentiator
+// 	i.mu.Lock()
+// 	shards, _ := i.shards[block]
+// 	i.shards[block] = append(shards, s)
+// 	i.mu.Unlock()
+// 	return nil
+// }
 
 func (i *Index) AddFile(
 	ctx context.Context,
