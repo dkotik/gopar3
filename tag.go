@@ -12,9 +12,7 @@ const (
 	TagBytesForSourceSize  = 8
 	TagBytesForShardQuorum = 1
 	TagBytesForShardOrder  = 1
-	TagBytesForShardGroup  = 2
-
-	// Derivatives:
+	TagBytesForShardBatch  = 2
 
 	TagBeginSourceCRC   = 0
 	TagEndSourceCRC     = TagBeginSourceCRC + TagBytesForCRC
@@ -24,9 +22,9 @@ const (
 	TagEndShardQuorum   = TagBeginShardQuorum + TagBytesForShardQuorum
 	TagBeginShardOrder  = TagEndShardQuorum
 	TagEndShardOrder    = TagBeginShardOrder + TagBytesForShardOrder
-	TagBeginShardGroup  = TagEndShardOrder
-	TagEndShardGroup    = TagBeginShardGroup + TagBytesForShardGroup
-	TagSize             = TagEndShardGroup - TagBeginSourceCRC
+	TagBeginShardBatch  = TagEndShardOrder
+	TagEndShardBatch    = TagBeginShardBatch + TagBytesForShardBatch
+	TagSize             = TagEndShardBatch - TagBeginSourceCRC
 	DifferentiatorSize  = TagEndShardQuorum - TagBeginSourceCRC
 )
 
@@ -36,7 +34,7 @@ type Tag struct {
 	SourceSize  uint64
 	ShardQuorum uint8
 	ShardOrder  uint8
-	ShardGroup  uint16
+	ShardBatch  uint16
 }
 
 func NewTag(b []byte) Tag {
@@ -49,8 +47,8 @@ func NewTag(b []byte) Tag {
 		),
 		ShardQuorum: b[TagBeginShardQuorum],
 		ShardOrder:  b[TagBeginShardOrder],
-		ShardGroup: binary.BigEndian.Uint16(
-			b[TagBeginShardGroup:TagEndShardGroup],
+		ShardBatch: binary.BigEndian.Uint16(
+			b[TagBeginShardBatch:TagEndShardBatch],
 		),
 	}
 }
@@ -68,8 +66,8 @@ func (t Tag) Bytes() (b []byte) {
 	b[TagBeginShardQuorum] = t.ShardQuorum
 	b[TagBeginShardOrder] = t.ShardOrder
 	binary.BigEndian.PutUint16(
-		b[TagBeginShardGroup:TagEndShardGroup],
-		t.ShardGroup,
+		b[TagBeginShardBatch:TagEndShardBatch],
+		t.ShardBatch,
 	)
 	return b
 }
@@ -82,7 +80,7 @@ type tagWriter struct {
 }
 
 func (tw *tagWriter) ReadFrom(r io.Reader) (n int64, err error) {
-	if tw.tag.ShardGroup == math.MaxUint16 && tw.tag.ShardOrder == math.MaxUint8 {
+	if tw.tag.ShardBatch == math.MaxUint16 && tw.tag.ShardOrder == math.MaxUint8 {
 		return 0, errors.New("too many shards")
 	}
 	n, err = io.Copy(tw.w, r)
@@ -96,11 +94,11 @@ func (tw *tagWriter) ReadFrom(r io.Reader) (n int64, err error) {
 		tw.encoded[TagBeginShardOrder] = tw.tag.ShardOrder
 	} else {
 		tw.tag.ShardOrder = 0
-		tw.tag.ShardGroup++
+		tw.tag.ShardBatch++
 		tw.encoded[TagBeginShardOrder] = 0
 		binary.BigEndian.PutUint16(
-			tw.encoded[TagBeginShardGroup:TagEndShardGroup],
-			tw.tag.ShardGroup,
+			tw.encoded[TagBeginShardBatch:TagEndShardBatch],
+			tw.tag.ShardBatch,
 		)
 	}
 	// TODO: write checksum?

@@ -17,8 +17,8 @@ func TestTagLimits(t *testing.T) {
 	if ShardLimit != math.MaxUint8 {
 		t.Fatal("unexpected shard limit", ShardLimit, math.MaxUint8)
 	}
-	if ShardGroupLimit != math.MaxUint16 {
-		t.Fatal("unexpected shard limit", ShardGroupLimit, math.MaxUint16)
+	if ShardBatchLimit != math.MaxUint16 {
+		t.Fatal("unexpected shard limit", ShardBatchLimit, math.MaxUint16)
 	}
 	if SourceSizeLimit != math.MaxUint64 {
 		t.Fatal("unexpected shard limit")

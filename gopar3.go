@@ -8,16 +8,17 @@ import (
 )
 
 const (
-	PaddingByte = '?'
-
 	ShardLimit      = 1<<(TagBytesForShardOrder*8) - 1
-	ShardGroupLimit = 1<<(TagBytesForShardGroup*8) - 1
+	ShardBatchLimit = 1<<(TagBytesForShardBatch*8) - 1
 	SourceSizeLimit = 1<<(TagBytesForSourceSize*8) - 1
 )
 
 // castagnoliTable sources [crc.New] with 0x82f63b78
 // polynomial. It is known for superior error detection
-// and use for BitTorrent and iSCSI protocols.
+// and use in BitTorrent and iSCSI protocols.
+//
+// Example of BitTorrent use:
+// https://github.com/anacrolix/torrent/blob/master/bep40.go
 var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
 
 type crcWriteCloser struct {
