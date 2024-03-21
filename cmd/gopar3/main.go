@@ -9,12 +9,9 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
 	"os"
 
-	"github.com/dkotik/gopar3"
 	"github.com/urfave/cli/v2"
 )
 
@@ -27,26 +24,13 @@ func main() {
 				Name:    "inflate",
 				Aliases: []string{"i"},
 				Usage:   "one output file for each input file",
-				Action: func(ctx *cli.Context) (err error) {
-					sources := ctx.Args().Slice()
-					if len(sources) == 0 {
-						return errors.New("provide at least one source")
-					}
-					for _, source := range sources {
-						fmt.Println("inflating: ", source)
-						if err = gopar3.Inflate(
-							ctx.Context,
-							".",
-							source,
-							5,
-							3,
-							64,
-						); err != nil {
-							return err
-						}
-					}
-					return nil
+				Flags: []cli.Flag{
+					flagOutput,
+					flagQuorum,
+					flagParity,
+					flagSize,
 				},
+				Action: commandInflate,
 			},
 		},
 	}
