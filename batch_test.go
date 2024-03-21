@@ -2,7 +2,10 @@ package gopar3
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"testing"
+	"time"
 )
 
 func TestBatchLoader(t *testing.T) {
@@ -15,7 +18,7 @@ func TestBatchLoader(t *testing.T) {
 	}
 
 	batch, loaded, err := loader.Load(b)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
 	if len(batch) != loader.Shards {
@@ -37,5 +40,32 @@ func TestBatchLoader(t *testing.T) {
 			t.Logf("shard: %q", shard)
 			t.Fatal("parity shard is not empty")
 		}
+	}
+}
+
+func TestBatchStreaming(t *testing.T) {
+	b := bytes.NewBufferString("12345678901234567890")
+	loader := &BatchLoader{
+		Quorum:    2,
+		Shards:    3,
+		ShardSize: 1,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	c := make(chan [][]byte)
+	go func() {
+		if err := loader.Stream(ctx, c, b); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	gotBack := 0
+	for batch := range c {
+		t.Logf("Got batch: %q %q %q", batch[0], batch[1], batch[2])
+		gotBack++
+	}
+	if gotBack != 11 {
+		t.Fatal("got the wrong number of batches:", gotBack, "vs", 11)
 	}
 }
