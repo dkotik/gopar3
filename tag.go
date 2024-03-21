@@ -3,7 +3,6 @@ package gopar3
 import (
 	"encoding/binary"
 	"errors"
-	"io"
 	"math"
 )
 
@@ -72,44 +71,75 @@ func (t Tag) Bytes() (b []byte) {
 	return b
 }
 
-type tagWriter struct {
-	w          io.Writer
+type Tagger interface {
+	Bytes() []byte
+	Next() error
+}
+
+type sequentialTagger struct {
 	encoded    []byte
 	tag        Tag
 	shardLimit uint8
 }
 
-func (tw *tagWriter) ReadFrom(r io.Reader) (n int64, err error) {
-	if tw.tag.ShardBatch == math.MaxUint16 && tw.tag.ShardOrder == math.MaxUint8 {
-		return 0, errors.New("too many shards")
+// NewSequentialTagger prepares a tagger that increments
+// shard counter to the limit. Then, it sets the shard counter
+// to zero and increments shard batch counter.
+func NewSequentialTagger(t Tag, shardLimit uint8) Tagger {
+	return &sequentialTagger{
+		encoded:    t.Bytes(),
+		tag:        t,
+		shardLimit: shardLimit,
 	}
-	n, err = io.Copy(tw.w, r)
-	if err != nil {
-		return n, err
-	}
-	tn, err := tw.w.Write(tw.encoded)
-	n += int64(tn)
-	if tw.tag.ShardOrder < tw.shardLimit {
-		tw.tag.ShardOrder++
-		tw.encoded[TagBeginShardOrder] = tw.tag.ShardOrder
-	} else {
-		tw.tag.ShardOrder = 0
-		tw.tag.ShardBatch++
-		tw.encoded[TagBeginShardOrder] = 0
-		binary.BigEndian.PutUint16(
-			tw.encoded[TagBeginShardBatch:TagEndShardBatch],
-			tw.tag.ShardBatch,
-		)
-	}
-	// TODO: write checksum?
-	return n, err
 }
 
-func NewTagWriter(to io.Writer, tag Tag, parityShards uint8) io.ReaderFrom {
-	return &tagWriter{
-		w:          to,
-		encoded:    nil,
-		tag:        tag,
-		shardLimit: tag.ShardQuorum + parityShards,
+func (t *sequentialTagger) Bytes() []byte {
+	return t.encoded
+}
+
+func (t *sequentialTagger) Next() error {
+	if t.tag.ShardBatch == math.MaxUint16 && t.tag.ShardOrder == math.MaxUint8 {
+		return errors.New("too many shards")
 	}
+	if t.tag.ShardOrder < t.shardLimit {
+		t.tag.ShardOrder++
+		t.encoded[TagBeginShardOrder] = t.tag.ShardOrder
+	} else {
+		t.tag.ShardOrder = 0
+		t.tag.ShardBatch++
+		t.encoded[TagBeginShardOrder] = 0
+		binary.BigEndian.PutUint16(
+			t.encoded[TagBeginShardBatch:TagEndShardBatch],
+			t.tag.ShardBatch,
+		)
+	}
+	return nil
+}
+
+type latteralTagger struct {
+	encoded []byte
+	tag     Tag
+}
+
+// NewLateralTagger prepares a tagger that increments
+// shard batch counter. Useful for writing data into
+// separate shard files.
+func NewLateralTagger(t Tag) Tagger {
+	return &latteralTagger{tag: t}
+}
+
+func (t *latteralTagger) Bytes() []byte {
+	return t.encoded
+}
+
+func (t *latteralTagger) Next() error {
+	if t.tag.ShardBatch == math.MaxUint16 {
+		return errors.New("too many shards")
+	}
+	t.tag.ShardBatch++
+	binary.BigEndian.PutUint16(
+		t.encoded[TagBeginShardBatch:TagEndShardBatch],
+		t.tag.ShardBatch,
+	)
+	return nil
 }
