@@ -4,8 +4,13 @@ go 1.22
 
 require (
 	github.com/klauspost/reedsolomon v1.9.12
-	github.com/spf13/pflag v1.0.5
+	github.com/urfave/cli/v2 v2.27.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
 
-require github.com/klauspost/cpuid/v2 v2.0.2 // indirect
+require (
+	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.2 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
+)

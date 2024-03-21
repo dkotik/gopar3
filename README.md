@@ -1,5 +1,7 @@
 # GoPar3: File Integrity for the Paranoid
 
+Protect data from partial loss or corruption.
+
 Go implementation of self-healing archive manager with Reed-Solomon error correction inspired by old Par1 and Par2 tools.
 
 ## Roadmap to Beta

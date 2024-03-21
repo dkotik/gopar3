@@ -1,55 +1,61 @@
+/*
+Package main provides a command line interface to:
+
+- [gopar3.Inflate]
+- [gopar3.Split]
+- [gopar3.Scatter]
+*/
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 
-	flag "github.com/spf13/pflag"
-)
-
-var (
-	// TODO: SDTIN SDTOUT flags
-	fragments   = flag.UintP("fragments", "f", 9, "break input into this many parts")
-	growth      = flag.Float64P("growth", "g", 1.3, "all fragments together will take up this much\nmore space than the input")
-	telomeres   = flag.UintP("telomeres", "t", 8, "length of telomere padding protecting\nshard boundaries more padding increases\noutput resilience")
-	memoryLimit = flag.IntP("memoryMB", "m", 128, "memory usage limit for operations\nin Megabytes")
-	help        = flag.BoolP("help", "h", false, "print help message")
-
-	version = "Alpha"
+	"github.com/dkotik/gopar3"
+	"github.com/urfave/cli/v2"
 )
 
 func main() {
-	flag.Parse()
-	flag.CommandLine.SortFlags = false
-	flag.CommandLine.MarkHidden("help")
-	var err error
-	flag.Usage = func() {
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err.Error())
-			return
-		}
-		fmt.Fprintf(os.Stderr, "gopar3 v%s data resilience utility\n\n  gopar3 [encode|decode|inspect] [FILE] [FLAGS]\n\n", version)
-		flag.PrintDefaults()
+	app := &cli.App{
+		Name:  "gopar3",
+		Usage: "protect data from partial loss or corruption",
+		Commands: []*cli.Command{
+			{
+				Name:    "inflate",
+				Aliases: []string{"i"},
+				Usage:   "one output file for each input file",
+				Action: func(ctx *cli.Context) (err error) {
+					sources := ctx.Args().Slice()
+					if len(sources) == 0 {
+						return errors.New("provide at least one source")
+					}
+					for _, source := range sources {
+						fmt.Println("inflating: ", source)
+						if err = gopar3.Inflate(
+							ctx.Context,
+							".",
+							source,
+							5,
+							3,
+							64,
+						); err != nil {
+							return err
+						}
+					}
+					return nil
+				},
+			},
+		},
 	}
 
-	if !*help {
-		switch flag.Arg(0) {
-		case "encode":
-			// spew.Dump(fragments, growth)
-			// flagset.Parse(os.Args[2:])
-			// flagset.PrintDefaults()
-			// fmt.Printf("%d %t", fragments, *growth)
-			// fmt.Printf("%d %t", uint16(*fragments), uint8(*fragments))
-			return
-		case "decode":
-			// *memoryLimit * 1024 * 1024
-			return
-		case "inspect":
-			return
-		case "version":
-			fmt.Fprintf(os.Stderr, "gopar3 %s\n", version)
-			return
-		}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// TODO: add cancellation
+
+	if err := app.RunContext(ctx, os.Args); err != nil {
+		log.Fatal(err)
 	}
-	flag.Usage()
 }

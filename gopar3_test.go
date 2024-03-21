@@ -2,10 +2,29 @@ package gopar3
 
 import (
 	"bytes"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/klauspost/reedsolomon"
 )
+
+func TestInflate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	err := Inflate(
+		ctx,
+		t.TempDir(),
+		"README.md",
+		5,
+		3,
+		64,
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestIdenticalQuorumShardsWithDifferentParity(t *testing.T) {
 	quorum := [][]byte{

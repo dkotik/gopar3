@@ -25,13 +25,13 @@ func TestTagLimits(t *testing.T) {
 	}
 
 	a := []byte("1234567890123456")
-	b := NewTag(a).Bytes()
+	b := NewTagFromBytes(a).Bytes()
 	if !bytes.Equal(a, b) {
 		t.Logf("a: %q", a)
 		t.Logf("b: %q", b)
 		t.Fatal("values do not match")
 	}
-	if !reflect.DeepEqual(NewTag(a), NewTag(b)) {
+	if !reflect.DeepEqual(NewTagFromBytes(a), NewTagFromBytes(b)) {
 		t.Fatal("decoded tags do not match")
 	}
 }

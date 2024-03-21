@@ -1,8 +1,11 @@
 package gopar3
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
+	"hash/crc32"
+	"io"
 	"math"
 )
 
@@ -36,7 +39,38 @@ type Tag struct {
 	ShardBatch  uint16
 }
 
-func NewTag(b []byte) Tag {
+func NewTag(
+	ctx context.Context,
+	r io.Reader,
+	quorum uint8,
+) (tag Tag, err error) {
+	tag.ShardQuorum = quorum
+	// 32 * 1024 is io package default
+	b := make([]byte, 4*32*1024)
+	crc := crc32.New(castagnoliTable)
+	n := 0
+
+	for err == nil {
+		select {
+		case <-ctx.Done():
+			return tag, ctx.Err()
+		default:
+		}
+		n, err = io.ReadFull(r, b)
+		tag.SourceSize += uint64(n)
+		_, _ = crc.Write(b)
+	}
+	switch err {
+	case io.EOF, io.ErrUnexpectedEOF:
+		err = nil
+	default:
+		return
+	}
+	tag.SourceCRC = crc.Sum32()
+	return
+}
+
+func NewTagFromBytes(b []byte) Tag {
 	return Tag{
 		SourceCRC: binary.BigEndian.Uint32(
 			b[TagBeginSourceCRC:TagEndSourceCRC],

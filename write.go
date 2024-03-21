@@ -7,14 +7,6 @@ import (
 	"github.com/dkotik/gopar3/telomeres"
 )
 
-// castagnoliTable sources [crc.New] with 0x82f63b78
-// polynomial. It is known for superior error detection
-// and use in BitTorrent and iSCSI protocols.
-//
-// Example of BitTorrent use:
-// https://github.com/anacrolix/torrent/blob/master/bep40.go
-var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
-
 func WriteShardsWithTagAndChecksum(
 	w *telomeres.Encoder,
 	shards <-chan []byte,
