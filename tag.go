@@ -86,6 +86,7 @@ func NewTagFromBytes(b []byte) Tag {
 	}
 }
 
+// Bytes encodes the tag into binary format.
 func (t Tag) Bytes() (b []byte) {
 	b = make([]byte, TagSize)
 	binary.BigEndian.PutUint32(

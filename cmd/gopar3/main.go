@@ -18,12 +18,13 @@ import (
 func main() {
 	app := &cli.App{
 		Name:  "gopar3",
-		Usage: "protect data from partial loss or corruption",
+		Usage: "(Alpha) protect data from partial loss or corruption",
 		Commands: []*cli.Command{
 			{
-				Name:    "inflate",
-				Aliases: []string{"i"},
-				Usage:   "one output file for each input file",
+				Name:      "inflate",
+				Aliases:   []string{"i"},
+				Usage:     "one output file for each input file",
+				ArgsUsage: "[...FILES]",
 				Flags: []cli.Flag{
 					flagOutput,
 					flagQuorum,
@@ -31,6 +32,19 @@ func main() {
 					flagSize,
 				},
 				Action: commandInflate,
+			},
+			{
+				Name:      "inspect",
+				Aliases:   []string{"s"},
+				Usage:     "scan each input file or directory for data shards",
+				ArgsUsage: "[...FILES]",
+				Flags:     []cli.Flag{
+					// flagOutput,
+					// flagQuorum,
+					// flagParity,
+					// flagSize,
+				},
+				Action: commandInspect,
 			},
 		},
 	}
