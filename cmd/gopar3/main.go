@@ -46,6 +46,22 @@ func main() {
 				},
 				Action: commandInspect,
 			},
+			{
+				Name:      "restore",
+				Aliases:   []string{"r"},
+				Usage:     "recover original files from shards kept in source files",
+				ArgsUsage: "[...FILES]",
+				Flags:     []cli.Flag{},
+				Action:    commandRestore,
+			},
+			{
+				Name:      "checksum",
+				Aliases:   []string{"m"},
+				Usage:     "output a Castagnoli check sum for each source file",
+				ArgsUsage: "[...FILES]",
+				Flags:     []cli.Flag{},
+				Action:    commandChecksum,
+			},
 		},
 	}
 

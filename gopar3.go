@@ -138,3 +138,31 @@ func Inflate(
 
 	return errors.Join(err, <-readingError, <-parityError)
 }
+
+func CastagnoliSum(ctx context.Context, r io.Reader) (uint32, error) {
+	var (
+		crc  = crc32.New(castagnoliTable)
+		b    = make([]byte, 2*32*1024)
+		n    int
+		rerr error
+		werr error
+	)
+	for rerr == nil {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+		}
+
+		n, rerr = io.ReadFull(r, b)
+		if _, werr = crc.Write(b[:n]); werr != nil {
+			return 0, werr
+		}
+		switch rerr {
+		case io.EOF, io.ErrUnexpectedEOF:
+		default:
+			return 0, rerr
+		}
+	}
+	return crc.Sum32(), nil
+}

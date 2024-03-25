@@ -20,7 +20,7 @@ import (
 // Shard is a piece of a data. A certain number of shards are
 // required to recover one file block.
 type Shard struct {
-	// Source        string
+	Source      string
 	Size        int64
 	CursorStart int64
 	CursorEnd   int64
@@ -36,10 +36,30 @@ type Shard struct {
 // should be unique for different sources.
 func (s *Shard) Differentiator() string {
 	return fmt.Sprintf(
-		"%x@%db",
+		"%x_%db",
 		s.Tag.Bytes()[:DifferentiatorSize],
 		s.Size,
 	)
+}
+
+// Load reads associated data from disk into bytes
+func (s *Shard) Load() (_ []byte, err error) {
+	f, err := os.Open(s.Source)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
+	if _, err = f.Seek(s.CursorStart, io.SeekStart); err != nil {
+		return nil, err
+	}
+	r := telomeres.NewDecoder(f)
+	b := &bytes.Buffer{}
+	if _, err = io.CopyN(b, r, s.CursorEnd-s.CursorStart); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 type File struct {
@@ -99,15 +119,17 @@ func (i Index) Normalize() (err error) {
 			return 0
 		})
 
-		f.Batches = uint16(math.Ceil(
-			float64(f.Size) / float64(shardSize*int64(f.Quorum)),
-		))
+		f.Batches = uint16(math.Floor(
+			float64(f.Size)/float64(shardSize*int64(f.Quorum)),
+		)) + 1
 		f.Padding = uint64(f.Batches)*uint64(f.Quorum)*uint64(shardSize) - f.Size
 
 		// validate file
-		batch := make(map[uint8]struct{})
+		batch := make(map[uint8]uint32)
 		currentBatch := uint16(0)
 		quorum := int(f.Quorum)
+		knownSum := uint32(0)
+		ok := false
 		for _, shard := range f.Shards {
 			if shard.Error != "" {
 				continue // do not consider data from corrupt shards
@@ -122,9 +144,17 @@ func (i Index) Normalize() (err error) {
 					f.Error = fmt.Sprintf("there are no recoverable shards for batch %d", currentBatch)
 					break
 				}
-				batch = make(map[uint8]struct{})
+				batch = make(map[uint8]uint32) // reset
 			}
-			batch[shard.Tag.ShardOrder] = struct{}{}
+			if knownSum, ok = batch[shard.Tag.ShardOrder]; ok {
+				if shard.CastagnoliSum == knownSum {
+					shard.Error = "duplicate shard"
+				} else {
+					shard.Error = "duplicate shard with corrupt CRC"
+				}
+			} else {
+				batch[shard.Tag.ShardOrder] = shard.CastagnoliSum
+			}
 		}
 		if currentBatch+1 < f.Batches {
 			f.Error = fmt.Sprintf("there are only %d recoverable batches out of %d required for restoration", currentBatch+1, f.Batches)
@@ -187,7 +217,9 @@ func NewIndex(ctx context.Context, files ...string) (index Index, err error) {
 
 			for err == nil {
 				b.Reset()
-				shard := &Shard{}
+				shard := &Shard{
+					Source: file,
+				}
 				shard.CursorStart, err = tlm.Cursor()
 				if err != nil {
 					return err
