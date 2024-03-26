@@ -43,7 +43,7 @@ func (s *Shard) Differentiator() string {
 }
 
 // Load reads associated data from disk into bytes
-func (s *Shard) Load() (_ []byte, err error) {
+func (s *Shard) Load(ctx context.Context) (_ []byte, err error) {
 	f, err := os.Open(s.Source)
 	if err != nil {
 		return nil, err
@@ -55,11 +55,14 @@ func (s *Shard) Load() (_ []byte, err error) {
 		return nil, err
 	}
 	r := telomeres.NewDecoder(f)
+	// if err = r.SeekChunk(ctx); err != nil {
+	// 	return nil, err
+	// }
 	b := &bytes.Buffer{}
-	if _, err = io.CopyN(b, r, s.CursorEnd-s.CursorStart); err != nil {
+	if _, err = r.StreamChunk(ctx, b); err != nil {
 		return nil, err
 	}
-	return b.Bytes(), nil
+	return b.Bytes()[:b.Len()-TagSize-TagBytesForCRC], nil
 }
 
 type File struct {
@@ -119,7 +122,7 @@ func (i Index) Normalize() (err error) {
 			return 0
 		})
 
-		f.Batches = uint16(math.Floor(
+		f.Batches = uint16(math.Ceil(
 			float64(f.Size)/float64(shardSize*int64(f.Quorum)),
 		)) + 1
 		f.Padding = uint64(f.Batches)*uint64(f.Quorum)*uint64(shardSize) - f.Size
@@ -251,10 +254,9 @@ func NewIndex(ctx context.Context, files ...string) (index Index, err error) {
 						shard.Tag = NewTagFromBytes(tagBytes)
 
 						// log.Fatalf("%x %x", currentshardSum, crc.Sum(nil))
-						// TODO: writing tag bytes breaks the CRC? so strange?
-						// if _, err = crc.Write(tagBytes); err != nil {
-						// 	return err
-						// }
+						if _, err = crc.Write(tagBytes); err != nil {
+							return err
+						}
 
 						shard.CastagnoliSum = crc.Sum32()
 						if !bytes.Equal(currentshardSum, crc.Sum(nil)) {

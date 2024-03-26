@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"log"
 	"slices"
 
 	"github.com/klauspost/reedsolomon"
@@ -27,11 +28,10 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 			continue
 		}
 		batch = int(shard.Tag.ShardBatch)
-		fmt.Println("batch:", batch)
 		if batch > lastBatch {
 			// TODO: fix
-			// return fmt.Errorf("batch %d out of maximum range of %d", batch, lastBatch)
-			break
+			return fmt.Errorf("batch %d out of maximum range of %d", batch, lastBatch)
+			// break
 		}
 		batches[batch] = append(batches[batch], shard)
 	}
@@ -62,9 +62,9 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 	}
 
 	forReconstruction := make(chan [][]byte, 4)
-	forWriting := make(chan [][]byte, 4)
 	wg, ctx := errgroup.WithContext(ctx)
 	wg.Go(func() (err error) {
+		defer close(forReconstruction)
 		for _, batch := range batches {
 			select {
 			case <-ctx.Done():
@@ -74,10 +74,18 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 
 			shards := make([][]byte, len(batch))
 			for i, shard := range batch {
-				shards[i], err = shard.Load()
+				shards[i], err = shard.Load(ctx)
 				if err != nil {
 					return err
 				}
+
+				// fmt.Printf("%d -------------------------------\n", len(shards[i]))
+				// fmt.Println(string(shards[i]))
+				// if len(shards[i]) == 0 {
+				// 	// od -j 1024 -N 16
+				// 	fmt.Printf("check range: od -j %d -N %d", shard.CursorStart, shard.CursorEnd-shard.CursorStart)
+				// 	panic("loaded an empty shard without an error")
+				// }
 			}
 
 			select {
@@ -86,37 +94,48 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 			case forReconstruction <- shards:
 			}
 		}
-		close(forReconstruction)
 		return nil
 	})
 
+	forWriting := make(chan [][]byte, 4)
 	wg.Go(func() (err error) {
+		defer close(forWriting)
 		rs, err := reedsolomon.New(quorum, mostShards-quorum)
 		if err != nil {
 			return err
 		}
 		for shards := range forReconstruction {
-			rs.Reconstruct(shards)
+			if err = rs.ReconstructData(shards); err != nil {
+				return err
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case forWriting <- shards[:quorum]:
 			}
 		}
-		close(forWriting)
 		return nil
 	})
 
 	wg.Go(func() (err error) {
 		var (
-			written int64
-			n       int
-			crc     = crc32.New(castagnoliTable)
+			written    int64
+			writeLimit = int64(f.Size)
+			padding    int
+			n          int
+			crc        = crc32.New(castagnoliTable)
 		)
-		// panic("w")
 		for shards := range forWriting {
+			// padding calculations assume that all shards are the same size
+			n = len(shards[0]) // shard size here for determining padding
+			if padding = int(written) + (len(shards) * n) - int(writeLimit); padding > 0 {
+				shards = shards[:len(shards)-padding/n]
+				if cutLast := padding % n; cutLast > 0 {
+					shards[len(shards)-1] = shards[len(shards)-1][:n-cutLast]
+				}
+			}
+
 			for _, shard := range shards {
-				// io.Copy(w, bytes.NewReader(shard)) ?
 				n, err = w.Write(shard)
 				if err != nil {
 					return err
@@ -128,10 +147,11 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 			}
 		}
 
-		if written != int64(f.Size) {
+		if written != writeLimit {
 			return fmt.Errorf("the number of written bytes %d does not match expected file size %d", written, f.Size)
 		}
 		if crc.Sum32() != f.CastagnoliSum {
+			log.Print(crc.Sum32(), f.CastagnoliSum)
 			return errors.New("circular redundancy check does not match the expected value; the file is corrupt and cannot be recovered")
 		}
 		return nil

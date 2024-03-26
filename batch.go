@@ -1,7 +1,6 @@
 package gopar3
 
 import (
-	"context"
 	"io"
 )
 
@@ -15,36 +14,6 @@ type BatchLoader struct {
 	Quorum    int
 	Shards    int
 	ShardSize int
-}
-
-// Stream sends batches into a channel until context cancellation
-// or reader error. Closes the channel when the reader stops.
-func (g *BatchLoader) Stream(
-	ctx context.Context,
-	c chan<- [][]byte,
-	r io.Reader,
-) (err error) {
-	var batch [][]byte
-	for {
-		batch, _, err = g.Load(r)
-		switch err {
-		case nil:
-			c <- batch
-		case io.EOF:
-			c <- batch
-			close(c)
-			return nil
-		default:
-			close(c)
-			return err
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
 }
 
 // Seek repositions the cursor at the expected boundary of the
@@ -68,6 +37,9 @@ func (g *BatchLoader) Load(r io.Reader) (batch [][]byte, loaded int, err error) 
 	for i = range batch[:g.Quorum] {
 		shard := make([]byte, g.ShardSize)
 		n, err = io.ReadFull(r, shard)
+		if n == 0 {
+			return nil, loaded, err
+		}
 		loaded += n
 		switch err {
 		case nil:
@@ -84,7 +56,7 @@ func (g *BatchLoader) Load(r io.Reader) (batch [][]byte, loaded int, err error) 
 			if i < g.Quorum {
 				goto padRemaining
 			}
-			return batch, loaded, io.EOF
+			return batch, loaded, nil
 		}
 		batch[i] = shard
 	}
@@ -98,5 +70,5 @@ padRemaining:
 	for j = range batch[i:g.Quorum] {
 		batch[i+j] = shard
 	}
-	return batch, loaded, io.EOF
+	return batch, loaded, nil
 }

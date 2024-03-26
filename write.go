@@ -1,75 +1,71 @@
 package gopar3
 
 import (
+	"hash"
 	"hash/crc32"
 	"io"
 
 	"github.com/dkotik/gopar3/telomeres"
 )
 
-func WriteShardsWithTagAndChecksum(
-	w *telomeres.Encoder,
-	shards <-chan []byte,
-	tagger Tagger,
-) (err error) {
-	if _, err = w.Cut(); err != nil {
-		return err
+type writer struct {
+	encoder *telomeres.Encoder
+	tagger  Tagger
+	crc     hash.Hash32
+}
+
+func NewWriter(w *telomeres.Encoder, t Tagger) (io.Writer, error) {
+	if _, err := w.Cut(); err != nil {
+		return nil, err
 	}
-	var (
-		n     int
-		shard []byte
-		tag   []byte
-		crc   = crc32.New(castagnoliTable)
-	)
+	return &writer{
+		encoder: w,
+		tagger:  t,
+		crc:     crc32.New(castagnoliTable),
+	}, nil
+}
 
-	for {
-		select {
-		case shard = <-shards:
-			if shard == nil {
-				return nil
-			}
-			// write body
-			n, err = w.Write(shard)
-			if err != nil {
-				return err
-			}
-			if n != len(shard) {
-				return io.ErrShortWrite
-			}
-
-			// write tag
-			n, err = w.Write(tagger.Bytes())
-			if err != nil {
-				return err
-			}
-			if n != TagSize {
-				return io.ErrShortWrite
-			}
-			if err = tagger.Next(); err != nil {
-				return err
-			}
-
-			// write checksum
-			crc.Reset()
-			_, err = crc.Write(shard)
-			if err != nil {
-				return err
-			}
-			_, err = crc.Write(tag)
-			if err != nil {
-				return err
-			}
-			n, err = w.Write(crc.Sum(nil))
-			if err != nil {
-				return err
-			}
-			if n != TagBytesForCRC {
-				return io.ErrShortWrite
-			}
-
-			if _, err = w.Cut(); err != nil {
-				return err
-			}
-		}
+func (w *writer) Write(b []byte) (n int, err error) {
+	var pn int
+	// write body
+	n, err = w.encoder.Write(b)
+	if err != nil {
+		return n, err
 	}
+	if n != len(b) {
+		return n, io.ErrShortWrite
+	}
+
+	// write tag
+	tag := w.tagger.Bytes()
+	pn, err = w.encoder.Write(tag)
+	if err != nil {
+		return n, err
+	}
+	if pn != TagSize {
+		return n, io.ErrShortWrite
+	}
+
+	// write checksum
+	w.crc.Reset()
+	_, err = w.crc.Write(b)
+	if err != nil {
+		return n, err
+	}
+	_, err = w.crc.Write(tag)
+	if err != nil {
+		return n, err
+	}
+	pn, err = w.encoder.Write(w.crc.Sum(nil))
+	if err != nil {
+		return n, err
+	}
+	if pn != TagBytesForCRC {
+		return n, io.ErrShortWrite
+	}
+
+	if _, err = w.encoder.Cut(); err != nil {
+		return n, err
+	}
+	return n, w.tagger.Next()
 }

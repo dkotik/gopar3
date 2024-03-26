@@ -52,18 +52,15 @@ func TestWriteShardsWithTagAndChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := make(chan []byte)
-
-	go func() {
-		for _, tc := range testCases {
-			c <- []byte(tc)
-		}
-		close(c)
-	}()
-
-	err = WriteShardsWithTagAndChecksum(tlm, c, NewSequentialTagger(Tag{}, 5))
+	w, err := NewWriter(tlm, NewSequentialTagger(Tag{}, 5))
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	for _, tc := range testCases {
+		if _, err = w.Write([]byte(tc)); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	t.Logf("%q", b.String())

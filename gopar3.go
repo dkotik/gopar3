@@ -12,6 +12,7 @@ import (
 
 	"github.com/dkotik/gopar3/telomeres"
 	"github.com/klauspost/reedsolomon"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -97,46 +98,64 @@ func Inflate(
 		}
 	}
 
+	wg, ctx := errgroup.WithContext(ctx)
 	batches := make(chan [][]byte, 4)
-	readingError := make(chan error)
-	go func() {
-		readingError <- l.Stream(ctx, batches, r)
-		close(readingError)
-	}()
+	wg.Go(func() (err error) {
+		defer close(batches)
+		var batch [][]byte
+		for {
+			batch, _, err = l.Load(r)
+			if err != nil {
+				// panic(fmt.Sprintf("%+v", batch))
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case batches <- batch:
+			}
+		}
+	})
 
 	batchesWithParity := make(chan [][]byte, 4)
-	parityError := make(chan error)
-	go func() {
-		parityError <- AddParity(
-			batchesWithParity,
-			batches,
-			rs,
-		)
-		close(parityError)
-	}()
+	wg.Go(func() (err error) {
+		defer close(batchesWithParity)
+		for batch := range batches {
+			if err = rs.Reconstruct(batch); err != nil {
+				return err
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case batchesWithParity <- batch:
+			}
+		}
+		return nil
+	})
 
 	wtlm, err := telomeres.NewEncoder(w, 5)
 	if err != nil {
 		return err
 	}
-	shards := make(chan []byte, l.Shards)
-
-	go func() {
+	shardWriter, err := NewWriter(wtlm, NewSequentialTagger(tag, shardQuorum+shardParity))
+	if err != nil {
+		return err
+	}
+	wg.Go(func() (err error) {
 		for batch := range batchesWithParity {
+			// log.Printf("batch size is %d", len(batch))
 			for _, shard := range batch {
-				shards <- shard
+				if _, err = shardWriter.Write(shard); err != nil {
+					return err
+				}
 			}
 		}
-		close(shards)
-	}()
-
-	err = WriteShardsWithTagAndChecksum(
-		wtlm,
-		shards,
-		NewSequentialTagger(tag, shardQuorum+shardParity),
-	)
-
-	return errors.Join(err, <-readingError, <-parityError)
+		return nil
+	})
+	return wg.Wait()
 }
 
 func CastagnoliSum(ctx context.Context, r io.Reader) (uint32, error) {

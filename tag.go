@@ -58,7 +58,7 @@ func NewTag(
 		}
 		n, err = io.ReadFull(r, b)
 		tag.SourceSize += uint64(n)
-		_, _ = crc.Write(b)
+		_, _ = crc.Write(b[:n])
 	}
 	switch err {
 	case io.EOF, io.ErrUnexpectedEOF:
@@ -67,6 +67,7 @@ func NewTag(
 		return
 	}
 	tag.SourceCRC = crc.Sum32()
+	// panic(tag.SourceCRC)
 	return
 }
 
@@ -129,6 +130,7 @@ func NewSequentialTagger(t Tag, shardLimit uint8) Tagger {
 }
 
 func (t *sequentialTagger) Bytes() []byte {
+	// log.Printf("tag shard %d.%d", t.tag.ShardBatch, t.tag.ShardOrder)
 	return t.encoded
 }
 
@@ -136,8 +138,8 @@ func (t *sequentialTagger) Next() error {
 	if t.tag.ShardBatch == math.MaxUint16 && t.tag.ShardOrder == math.MaxUint8 {
 		return errors.New("too many shards")
 	}
+	t.tag.ShardOrder++
 	if t.tag.ShardOrder < t.shardLimit {
-		t.tag.ShardOrder++
 		t.encoded[TagBeginShardOrder] = t.tag.ShardOrder
 	} else {
 		t.tag.ShardOrder = 0
