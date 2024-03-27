@@ -72,9 +72,9 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 			default:
 			}
 
-			shards := make([][]byte, len(batch))
-			for i, shard := range batch {
-				shards[i], err = shard.Load(ctx)
+			shards := make([][]byte, mostShards)
+			for _, shard := range batch {
+				shards[int(shard.ShardOrder)], err = shard.Load(ctx)
 				if err != nil {
 					return err
 				}
@@ -106,6 +106,9 @@ func Restore(ctx context.Context, w io.Writer, f *File) (err error) {
 		}
 		for shards := range forReconstruction {
 			if err = rs.ReconstructData(shards); err != nil {
+				// for i, shard := range shards {
+				// 	log.Printf("%d: %s", i, shard)
+				// }
 				return err
 			}
 			select {

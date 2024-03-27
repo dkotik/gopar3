@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
@@ -105,6 +106,18 @@ func (t Tag) Bytes() (b []byte) {
 		t.ShardBatch,
 	)
 	return b
+}
+
+// String returns formatted tag for easy human recognition or logging.
+func (t Tag) String() string {
+	return fmt.Sprintf(
+		"%d.%d@%d",
+		t.ShardBatch,
+		t.ShardOrder,
+		t.SourceCRC,
+		// t.ShardQuorum,
+		// t.ShardSize,
+	)
 }
 
 type Tagger interface {

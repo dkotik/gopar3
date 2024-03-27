@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"math"
 	"os"
@@ -20,14 +19,13 @@ import (
 // Shard is a piece of a data. A certain number of shards are
 // required to recover one file block.
 type Shard struct {
-	Source      string
-	Size        int64
-	CursorStart int64
-	CursorEnd   int64
-	// CursorGap     int64
+	Source        string
+	Size          int64
+	FirstByte     int64
+	LastByte      int64
 	CastagnoliSum uint32
 	Error         string
-	Tag           Tag
+	Tag
 }
 
 // Differentiator returns hexadecimal representation of
@@ -44,6 +42,7 @@ func (s *Shard) Differentiator() string {
 
 // Load reads associated data from disk into bytes
 func (s *Shard) Load(ctx context.Context) (_ []byte, err error) {
+	// TODO: this function should be run in a map[source]*Reader
 	f, err := os.Open(s.Source)
 	if err != nil {
 		return nil, err
@@ -51,7 +50,7 @@ func (s *Shard) Load(ctx context.Context) (_ []byte, err error) {
 	defer func() {
 		err = errors.Join(err, f.Close())
 	}()
-	if _, err = f.Seek(s.CursorStart, io.SeekStart); err != nil {
+	if _, err = f.Seek(s.FirstByte, io.SeekStart); err != nil {
 		return nil, err
 	}
 	r := telomeres.NewDecoder(f)
@@ -62,7 +61,7 @@ func (s *Shard) Load(ctx context.Context) (_ []byte, err error) {
 	if _, err = r.StreamChunk(ctx, b); err != nil {
 		return nil, err
 	}
-	return b.Bytes()[:b.Len()-TagSize-TagBytesForCRC], nil
+	return b.Bytes()[TagBytesForCRC+TagSize:], nil
 }
 
 type File struct {
@@ -162,6 +161,7 @@ func (i Index) Normalize() (err error) {
 		if currentBatch+1 < f.Batches {
 			f.Error = fmt.Sprintf("there are only %d recoverable batches out of %d required for restoration", currentBatch+1, f.Batches)
 		}
+		// panic(f.Batches)
 	}
 	return nil
 }
@@ -209,69 +209,15 @@ func NewIndex(ctx context.Context, files ...string) (index Index, err error) {
 				err = errors.Join(err, f.Close())
 			}()
 
-			var n int64
-			tlm := telomeres.NewDecoder(f)
-			if err = tlm.SeekChunk(ctx); err != nil {
-				return err
-			}
-			buf := make([]byte, 32*1024)
-			b := &bytes.Buffer{}
-			crc := crc32.New(castagnoliTable)
-
-			for err == nil {
-				b.Reset()
-				shard := &Shard{
-					Source: file,
-				}
-				shard.CursorStart, err = tlm.Cursor()
+			r := NewReader(file, f)
+			for {
+				// b := &bytes.Buffer{}
+				// shard, err := r.NextShard(ctx, b)
+				// log.Fatalf("%s", b.String())
+				shard, err := r.NextShard(ctx, io.Discard)
 				if err != nil {
-					return err
+					break
 				}
-				n, err = tlm.StreamChunkBuffer(ctx, b, buf)
-				if err != nil {
-					return err
-				}
-
-				if n > 0 {
-					shard.CursorEnd, err = tlm.Cursor()
-					if err != nil {
-						return err
-					}
-					if n > TagSize+TagBytesForCRC {
-						crc.Reset()
-						_, err = io.CopyN(crc, b, n-TagSize-TagBytesForCRC)
-						if err != nil {
-							return err
-						}
-						tagBytes := buf[:TagSize]
-						currentshardSum := buf[TagSize : TagSize+TagBytesForCRC]
-						if _, err = io.ReadFull(b, tagBytes); err != nil {
-							return err
-						}
-						if _, err = io.ReadFull(b, currentshardSum); err != nil {
-							return err
-						}
-						shard.Tag = NewTagFromBytes(tagBytes)
-
-						// log.Fatalf("%x %x", currentshardSum, crc.Sum(nil))
-						if _, err = crc.Write(tagBytes); err != nil {
-							return err
-						}
-
-						shard.CastagnoliSum = crc.Sum32()
-						if !bytes.Equal(currentshardSum, crc.Sum(nil)) {
-							shard.Error = "shard corrupt: Castagnoli CRC32 sum does not match"
-						} else if b.Len() != 0 {
-							shard.Error = "failed to read the entire shard data"
-						}
-					} else {
-						shard.Error = "shard too small"
-					}
-					shard.Size = n
-				} else {
-					shard.CursorEnd = shard.CursorStart
-				}
-
 				differentiator := shard.Differentiator()
 				mu.Lock()
 				file, ok := index[differentiator]
